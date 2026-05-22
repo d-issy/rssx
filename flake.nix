@@ -10,6 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        pyprojectContent = builtins.readFile ./pyproject.toml;
       in
       {
         devShells.default = pkgs.mkShell {
@@ -21,6 +22,7 @@
 
           shellHook = ''
             export UV_PYTHON=${pkgs.python312}/bin/python3.12
+            : "${builtins.hashString "sha256" pyprojectContent}"
             uv sync --quiet
             echo "rssx dev shell ready. Run: uv run rssx"
           '';
