@@ -68,9 +68,9 @@ def create_app(config: Config | None = None) -> FastAPI:
         folder_tree = q.build_folder_tree(folders)
         feeds = q.list_feeds(conn)
         return TEMPLATES.TemplateResponse(
+            request,
             "index.html",
             {
-                "request": request,
                 "folder_tree": folder_tree,
                 "feeds": feeds,
                 "entries": entries,
@@ -113,7 +113,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         if not entry:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(
-            "_entry_body.html", {"request": request, "entry": entry}
+            request, "_entry_body.html", {"entry": entry}
         )
 
     @app.post("/entries/{entry_id}/read", response_class=HTMLResponse)
@@ -123,7 +123,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         if not entry:
             raise HTTPException(404)
         resp = TEMPLATES.TemplateResponse(
-            "_entry_row.html", {"request": request, "entry": entry}
+            request, "_entry_row.html", {"entry": entry}
         )
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
@@ -135,7 +135,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         if not entry:
             raise HTTPException(404)
         resp = TEMPLATES.TemplateResponse(
-            "_entry_row.html", {"request": request, "entry": entry}
+            request, "_entry_row.html", {"entry": entry}
         )
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
@@ -144,9 +144,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     def sidebar(request: Request):
         folders = q.list_folders(conn)
         return TEMPLATES.TemplateResponse(
+            request,
             "_sidebar.html",
             {
-                "request": request,
                 "folder_tree": q.build_folder_tree(folders),
                 "feeds": q.list_feeds(conn),
                 "unread_total": q.get_unread_total(conn),
@@ -184,9 +184,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     def manage(request: Request):
         folders = q.list_folders(conn)
         return TEMPLATES.TemplateResponse(
+            request,
             "manage.html",
             {
-                "request": request,
                 "folders": folders,
                 "folder_tree": q.build_folder_tree(folders),
                 "feeds": q.list_feeds(conn),
