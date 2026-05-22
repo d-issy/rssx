@@ -1,0 +1,13 @@
+<article class="entry-article">
+  <header>
+    <h2><a href="{{ entry.url }}" target="_blank" rel="noopener noreferrer">{{ entry.title or '(無題)' }}</a></h2>
+    <div class="entry-meta">
+      <span>{{ entry.feed_title }}</span>
+      {% if entry.author %}<span>· {{ entry.author }}</span>{% endif %}
+      {% if entry.published_at %}<time>· {{ entry.published_at[:16] }}</time>{% endif %}
+    </div>
+  </header>
+  <div class="entry-content">
+    {{ entry.content|safe }}
+  </div>
+</article>

@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block title_suffix %} - 管理{% endblock %}
+{% block body %}
+<div class="manage">
+  <header class="topbar">
+    <a class="link" href="/">← 戻る</a>
+    <h1>フィード・フォルダ管理</h1>
+  </header>
+
+  <section>
+    <h2>フォルダを追加</h2>
+    <form method="post" action="/folders" class="form-inline">
+      <input type="text" name="name" placeholder="フォルダ名" required>
+      <select name="parent_id">
+        <option value="">(ルート)</option>
+        {% for f in folders %}
+          <option value="{{ f.id }}">{{ f.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">追加</button>
+    </form>
+
+    <h3>既存のフォルダ</h3>
+    <ul class="list">
+      {% for f in folders %}
+        <li>
+          {{ f.name }}
+          {% if f.parent_id %}<small>(親 ID: {{ f.parent_id }})</small>{% endif %}
+          <form method="post" action="/folders/{{ f.id }}/delete" style="display:inline">
+            <button type="submit" class="danger">削除</button>
+          </form>
+        </li>
+      {% else %}
+        <li class="empty">フォルダ無し</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section>
+    <h2>フィードを追加</h2>
+    <form method="post" action="/feeds" class="form-grid">
+      <label>URL <input type="url" name="url" required></label>
+      <label>タイトル(空欄なら自動取得) <input type="text" name="title"></label>
+      <label>フォルダ
+        <select name="folder_id">
+          <option value="">(未分類)</option>
+          {% for f in folders %}
+            <option value="{{ f.id }}">{{ f.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">追加</button>
+    </form>
+
+    <h3>既存のフィード</h3>
+    <ul class="list">
+      {% for feed in feeds %}
+        <li>
+          <form method="post" action="/feeds/{{ feed.id }}/edit" class="form-inline">
+            <input type="text" name="title" value="{{ feed.title }}">
+            <select name="folder_id">
+              <option value="">(未分類)</option>
+              {% for f in folders %}
+                <option value="{{ f.id }}" {% if feed.folder_id == f.id %}selected{% endif %}>{{ f.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit">保存</button>
+          </form>
+          <small>{{ feed.url }}</small>
+          {% if feed.last_error %}<small class="error">エラー: {{ feed.last_error }}</small>{% endif %}
+          <form method="post" action="/refresh/feed/{{ feed.id }}" style="display:inline">
+            <button type="submit">更新</button>
+          </form>
+          <form method="post" action="/feeds/{{ feed.id }}/delete" style="display:inline">
+            <button type="submit" class="danger">削除</button>
+          </form>
+        </li>
+      {% else %}
+        <li class="empty">フィード無し</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

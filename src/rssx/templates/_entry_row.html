@@ -1,0 +1,16 @@
+<li class="entry {% if entry.is_read %}read{% endif %}"
+    id="entry-{{ entry.id }}"
+    data-entry-id="{{ entry.id }}"
+    data-url="{{ entry.url or '' }}">
+  <div class="entry-row">
+    <button class="star {% if entry.is_starred %}on{% endif %}"
+            hx-post="/entries/{{ entry.id }}/star"
+            hx-target="#entry-{{ entry.id }}"
+            hx-swap="outerHTML"
+            title="スター (f)">{% if entry.is_starred %}★{% else %}☆{% endif %}</button>
+    <span class="entry-feed">{{ entry.feed_title }}</span>
+    <span class="entry-title">{{ entry.title or '(無題)' }}</span>
+    <time class="entry-date">{{ (entry.published_at or entry.fetched_at)[:16] }}</time>
+  </div>
+  <div class="entry-body" id="body-{{ entry.id }}" hidden></div>
+</li>

@@ -1,0 +1,50 @@
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <a class="sidebar-link {% if scope == 'all' %}active{% endif %}" href="/?scope=all">
+      <span>すべて</span><span class="badge">{{ unread_total }}</span>
+    </a>
+    <a class="sidebar-link {% if scope == 'starred' %}active{% endif %}" href="/?scope=starred">
+      <span>★ スター</span><span class="badge">{{ starred_total }}</span>
+    </a>
+  </div>
+
+  {% macro render_folder(node) -%}
+    <li>
+      <a class="sidebar-link {% if scope == 'folder' and current_folder_id == node.id %}active{% endif %}"
+         href="/?scope=folder&folder={{ node.id }}">
+        <span>📁 {{ node.name }}</span>
+      </a>
+      {% if node.children %}
+        <ul class="folder-children">
+          {% for child in node.children %}{{ render_folder(child) }}{% endfor %}
+        </ul>
+      {% endif %}
+    </li>
+  {%- endmacro %}
+
+  <div class="sidebar-section">
+    <div class="sidebar-heading">フォルダ</div>
+    <ul class="folder-tree">
+      {% for node in folder_tree %}{{ render_folder(node) }}{% endfor %}
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-heading">フィード</div>
+    <ul class="feed-list">
+      {% for feed in feeds %}
+        <li>
+          <a class="sidebar-link {% if scope == 'feed' and current_feed_id == feed.id %}active{% endif %}"
+             href="/?scope=feed&feed={{ feed.id }}">
+            <span class="truncate">{{ feed.title }}</span>
+            <span class="badge">{{ feed.unread_count }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <a class="sidebar-link" href="/manage">⚙ 管理</a>
+  </div>
+</nav>

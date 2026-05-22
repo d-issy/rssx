@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main">
+    <header class="topbar">
+      <form class="search" action="/search" method="get">
+        <input type="search" name="q" value="{{ query }}" placeholder="検索 (/)" id="searchbox">
+      </form>
+      <div class="actions">
+        <form method="post" action="/refresh"><button type="submit">すべて更新</button></form>
+        {% if scope == 'feed' and current_feed_id %}
+          <form method="post" action="/refresh/feed/{{ current_feed_id }}">
+            <button type="submit">このフィードを更新</button>
+          </form>
+        {% endif %}
+        <a class="link" href="/?scope={{ scope }}{% if current_folder_id %}&folder={{ current_folder_id }}{% endif %}{% if current_feed_id %}&feed={{ current_feed_id }}{% endif %}&unread={{ 0 if unread_only else 1 }}">
+          {{ 'すべて表示' if unread_only else '未読のみ' }}
+        </a>
+      </div>
+    </header>
+
+    <ul class="entries" id="entries">
+      {% for entry in entries %}{% include "_entry_row.html" %}{% endfor %}
+      {% if not entries %}
+        <li class="empty">表示する記事がありません。</li>
+      {% endif %}
+    </ul>
+  </main>
+</div>
+{% endblock %}
