@@ -11,3 +11,7 @@ result-*
 *.db-wal
 *.db-shm
 .DS_Store
+
+# Frontend
+node_modules/
+src/rssx/static/dist/

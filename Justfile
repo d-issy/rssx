@@ -1,28 +1,36 @@
 default:
     @just --list
 
-# Start the server
+# Start the server (expects the frontend bundle to already exist)
 run:
     uv run rssx
 
-# Start the dev server with hot reload (server restart + browser auto-reload)
+# Start the dev server: server reload + frontend watch, in parallel
 dev:
-    RSSX_DEV=1 uv run rssx
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'kill 0' EXIT INT TERM
+    RSSX_DEV=1 uv run rssx &
+    pnpm dev &
+    wait
 
-# Run all checks (lint + format check + typecheck)
-lint:
+# Lint everything (backend + frontend)
+lint: lint-backend lint-frontend
+
+# Lint backend: ruff + mypy
+lint-backend:
     uv run ruff check
     uv run ruff format --check
     uv run mypy
 
-# Format code
-fmt:
-    uv run ruff format
+# Lint frontend: oxlint + tsc
+lint-frontend:
+    pnpm exec oxlint
+    pnpm typecheck
 
-# Auto-fix lint issues and format
-fix:
-    uv run ruff check --fix
-    uv run ruff format
+# Auto-format and auto-fix everything (Python + TS + JSON + Nix)
+fmt:
+    treefmt
 
 # Connect to the SQLite database
 db db_path="${XDG_DATA_HOME:-$HOME/.local/share}/rssx/rssx.db":

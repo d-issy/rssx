@@ -1,0 +1,36 @@
+[global]
+excludes = [
+  "pnpm-lock.yaml",
+  "uv.lock",
+  "flake.lock",
+  "src/rssx/static/dist/**",
+  "node_modules/**",
+  ".venv/**",
+  ".direnv/**",
+  ".mypy_cache/**",
+  ".ruff_cache/**",
+]
+
+[formatter.ruff-check]
+command = "uv"
+options = ["run", "ruff", "check", "--fix", "--exit-zero"]
+includes = ["*.py"]
+
+[formatter.ruff-format]
+command = "uv"
+options = ["run", "ruff", "format"]
+includes = ["*.py"]
+
+[formatter.oxlint]
+command = "pnpm"
+options = ["exec", "oxlint", "--fix"]
+includes = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"]
+
+[formatter.oxfmt]
+command = "pnpm"
+options = ["exec", "oxfmt"]
+includes = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.json", "*.jsonc"]
+
+[formatter.nixfmt]
+command = "nixfmt"
+includes = ["*.nix"]
