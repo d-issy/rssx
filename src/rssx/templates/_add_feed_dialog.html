@@ -1,0 +1,28 @@
+<form id="add-feed-form">
+  <header class="add-feed-header">
+    <h2>フィードを追加</h2>
+    <button type="button" class="add-feed-close" aria-label="閉じる">×</button>
+  </header>
+  <label class="add-feed-field">
+    <span>フィード URL</span>
+    <input type="url" name="url" placeholder="https://example.com/feed" required autofocus>
+  </label>
+  <label class="add-feed-field">
+    <span>フォルダ</span>
+    <select name="folder_id" data-folder-target>
+      <option value="">(未分類)</option>
+      {% for f in folders %}
+        <option value="{{ f.id }}">{{ f.name }}</option>
+      {% endfor %}
+      <option value="__new">＋ 新しいフォルダを作る</option>
+    </select>
+  </label>
+  <label class="add-feed-field add-feed-new-folder" hidden>
+    <span>新しいフォルダ名</span>
+    <input type="text" name="new_folder_name" placeholder="例：技術ブログ">
+  </label>
+  <footer class="add-feed-footer">
+    <button type="button" class="add-feed-cancel">キャンセル</button>
+    <button type="submit" class="add-feed-submit">追加</button>
+  </footer>
+</form>

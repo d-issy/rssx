@@ -1,6 +1,8 @@
 import asyncio
+import json
 import logging
 import os
+import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -231,59 +233,228 @@ def create_app(config: Config | None = None) -> FastAPI:
         fetch_feed(conn, feed_id, fetch_cfg)
         return RedirectResponse("/", status_code=303)
 
-    @app.get("/manage", response_class=HTMLResponse)
-    def manage(request: Request):
-        folders = q.list_folders(conn)
+    def _is_htmx(request: Request) -> bool:
+        return request.headers.get("HX-Request") == "true"
+
+    def _render_feed_list(request: Request, feeds, folders):
         return TEMPLATES.TemplateResponse(
             request,
-            "manage.html",
-            {
-                "folders": folders,
-                "folder_tree": q.build_folder_tree(folders),
-                "feeds": q.list_feeds(conn),
-            },
+            "_manage_feed_list.html",
+            {"feeds": feeds, "folders": folders},
+        )
+
+    def _render_feed_row(request: Request, feed_id: int):
+        feed = q.get_feed(conn, feed_id)
+        if not feed:
+            raise HTTPException(404)
+        return TEMPLATES.TemplateResponse(
+            request,
+            "_manage_feed_row.html",
+            {"feed": feed, "folders": q.list_folders(conn)},
+        )
+
+    def _render_folder_row(request: Request, folder_id: int):
+        folder = q.get_folder(conn, folder_id)
+        if not folder:
+            raise HTTPException(404)
+        return TEMPLATES.TemplateResponse(
+            request,
+            "_manage_folder_row.html",
+            {"f": folder},
+        )
+
+    def _trigger(resp, *events: str):
+        # Use JSON object form so multiple events with colons in names (eg.
+        # "rssx:counts-changed") are parsed unambiguously by HTMX. Merges with
+        # any existing HX-Trigger header (also assumed JSON).
+        merged: dict[str, None] = {}
+        existing = resp.headers.get("HX-Trigger")
+        if existing:
+            try:
+                parsed = json.loads(existing)
+                if isinstance(parsed, dict):
+                    for k in parsed:
+                        merged[k] = None
+            except json.JSONDecodeError:
+                for name in existing.split(","):
+                    name = name.strip()
+                    if name:
+                        merged[name] = None
+        for e in events:
+            merged[e] = None
+        resp.headers["HX-Trigger"] = json.dumps(merged)
+        return resp
+
+    def _trigger_sidebar(resp):
+        return _trigger(resp, "rssx:counts-changed")
+
+    @app.get("/manage", response_class=HTMLResponse)
+    def manage(request: Request):
+        feeds = q.list_feeds_filtered(conn)
+        ctx = {
+            "folders": q.list_folders_with_counts(conn),
+            "feeds": feeds,
+        }
+        template = "_manage_dialog.html" if _is_htmx(request) else "manage.html"
+        return TEMPLATES.TemplateResponse(request, template, ctx)
+
+    @app.get("/manage/folders", response_class=HTMLResponse)
+    def manage_folders(request: Request):
+        return TEMPLATES.TemplateResponse(
+            request,
+            "_manage_folder_list.html",
+            {"folders": q.list_folders_with_counts(conn)},
+        )
+
+    @app.get("/manage/feeds", response_class=HTMLResponse)
+    def manage_feeds(
+        request: Request,
+        q_: Annotated[str, Query(alias="q")] = "",
+        folders: Annotated[list[str] | None, Query()] = None,
+    ):
+        if folders is None:
+            feeds = q.list_feeds_filtered(conn, query=q_)
+        else:
+            folder_ids: list[int] = []
+            include_orphan = False
+            for v in folders:
+                if v == "__orphan":
+                    include_orphan = True
+                else:
+                    try:
+                        folder_ids.append(int(v))
+                    except ValueError:
+                        continue
+            feeds = q.list_feeds_filtered(
+                conn, query=q_, folder_ids=folder_ids, include_orphan=include_orphan
+            )
+        return _render_feed_list(request, feeds, q.list_folders(conn))
+
+    @app.get("/add-feed", response_class=HTMLResponse)
+    def add_feed_form(request: Request):
+        return TEMPLATES.TemplateResponse(
+            request,
+            "_add_feed_dialog.html",
+            {"folders": q.list_folders(conn)},
         )
 
     @app.post("/folders")
     def folder_create(
+        request: Request,
         name: Annotated[str, Form()],
-        parent_id: Annotated[int | None, Form()] = None,
     ):
         if not name.strip():
             raise HTTPException(400, "name required")
-        q.add_folder(conn, name, parent_id)
+        q.add_folder(conn, name, None)
+        if _is_htmx(request):
+            return _trigger_sidebar(
+                TEMPLATES.TemplateResponse(
+                    request,
+                    "_manage_folder_list.html",
+                    {"folders": q.list_folders_with_counts(conn)},
+                )
+            )
+        return RedirectResponse("/manage", status_code=303)
+
+    @app.post("/folders/{folder_id}/rename", response_class=HTMLResponse)
+    def folder_rename(
+        request: Request,
+        folder_id: int,
+        name: Annotated[str, Form()],
+    ):
+        if not name.strip():
+            raise HTTPException(400, "name required")
+        q.rename_folder(conn, folder_id, name)
+        if _is_htmx(request):
+            return _trigger_sidebar(_render_folder_row(request, folder_id))
         return RedirectResponse("/manage", status_code=303)
 
     @app.post("/folders/{folder_id}/delete")
-    def folder_delete(folder_id: int):
-        q.delete_folder(conn, folder_id)
+    def folder_delete(
+        request: Request,
+        folder_id: int,
+        mode: Annotated[str, Form()] = "detach",
+    ):
+        if mode == "cascade":
+            q.delete_folder_cascade(conn, folder_id)
+        else:
+            q.delete_folder(conn, folder_id)
+        if _is_htmx(request):
+            resp = HTMLResponse("")
+            _trigger(resp, "rssx:counts-changed", "rssx:folder-changed")
+            return resp
         return RedirectResponse("/manage", status_code=303)
 
     @app.post("/feeds")
     def feed_create(
+        request: Request,
         url: Annotated[str, Form()],
         title: Annotated[str, Form()] = "",
-        folder_id: Annotated[int | None, Form()] = None,
+        folder_id: Annotated[str | None, Form()] = None,
+        new_folder_name: Annotated[str | None, Form()] = None,
     ):
         url = url.strip()
         if not url:
-            raise HTTPException(400, "url required")
+            raise HTTPException(400, "URL を入力してください")
+
+        existing = conn.execute("SELECT id, title FROM feeds WHERE url = ?", (url,)).fetchone()
+        if existing:
+            raise HTTPException(400, f"このURLは既に登録されています: {existing['title']}")
+
         site_url: str | None = None
         if not title.strip():
             try:
                 title, site_url = probe_feed_title(url)
             except Exception as e:
-                raise HTTPException(400, f"could not load feed: {e}") from e
-        feed_id = q.add_feed(conn, url=url, title=title, site_url=site_url, folder_id=folder_id)
+                raise HTTPException(400, f"フィードを読み込めませんでした: {e}") from e
+
+        # Resolve target folder. If __new, defer creation until *after* the
+        # feed insert succeeds so a duplicate-URL failure cannot leave behind
+        # an orphan empty folder.
+        new_folder_request: str | None = None
+        target_folder_id: int | None = None
+        if folder_id == "__new":
+            new_folder_request = (new_folder_name or "").strip()
+            if not new_folder_request:
+                raise HTTPException(400, "新しいフォルダ名を入力してください")
+        elif folder_id and folder_id != "":
+            try:
+                target_folder_id = int(folder_id)
+            except ValueError:
+                target_folder_id = None
+
+        try:
+            feed_id = q.add_feed(
+                conn, url=url, title=title, site_url=site_url, folder_id=target_folder_id
+            )
+        except sqlite3.IntegrityError as e:
+            raise HTTPException(400, "このURLは既に登録されています") from e
+
+        if new_folder_request is not None:
+            target_folder_id = q.add_folder(conn, new_folder_request, None)
+            q.update_feed_folder(conn, feed_id, target_folder_id)
         try:
             fetch_feed(conn, feed_id, fetch_cfg)
         except Exception:
             log.exception("initial fetch failed for new feed %s", url)
+        if _is_htmx(request):
+            resp = HTMLResponse("", status_code=204)
+            _trigger(
+                resp,
+                "rssx:feed-added",
+                "rssx:counts-changed",
+                "rssx:feed-folder-changed",
+            )
+            return resp
         return RedirectResponse("/manage", status_code=303)
 
     @app.post("/feeds/{feed_id}/delete")
-    def feed_delete(feed_id: int):
+    def feed_delete(request: Request, feed_id: int):
         q.delete_feed(conn, feed_id)
+        if _is_htmx(request):
+            resp = HTMLResponse("")
+            _trigger(resp, "rssx:counts-changed", "rssx:feed-folder-changed")
+            return resp
         return RedirectResponse("/manage", status_code=303)
 
     if DEV_MODE:
@@ -298,17 +469,26 @@ def create_app(config: Config | None = None) -> FastAPI:
 
             return StreamingResponse(gen(), media_type="text/event-stream")
 
-    @app.post("/feeds/{feed_id}/edit")
+    @app.post("/feeds/{feed_id}/edit", response_class=HTMLResponse)
     def feed_edit(
+        request: Request,
         feed_id: int,
         title: Annotated[str | None, Form()] = None,
         folder_id: Annotated[str | None, Form()] = None,
     ):
+        folder_changed = False
         if title is not None:
             q.update_feed_title(conn, feed_id, title)
         if folder_id is not None:
             new_folder = int(folder_id) if folder_id != "" else None
             q.update_feed_folder(conn, feed_id, new_folder)
+            folder_changed = True
+        if _is_htmx(request):
+            resp = _render_feed_row(request, feed_id)
+            _trigger(resp, "rssx:counts-changed")
+            if folder_changed:
+                _trigger(resp, "rssx:feed-folder-changed")
+            return resp
         return RedirectResponse("/manage", status_code=303)
 
     return app

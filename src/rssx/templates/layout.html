@@ -72,6 +72,16 @@
 <body>
   {% block body %}{% endblock %}
 
+  <dialog id="manage-dialog" class="manage-dialog" aria-label="管理">
+    <div class="manage-dialog-inner" id="manage-dialog-body" data-empty></div>
+  </dialog>
+
+  <dialog id="add-feed-dialog" class="add-feed-dialog" aria-label="フィードを追加">
+    <div class="add-feed-inner" id="add-feed-body" data-empty></div>
+  </dialog>
+
+  <div id="toast-host" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+
   <dialog id="shortcut-help" class="shortcut-help" aria-label="キーボードショートカット">
     <div class="shortcut-help-inner">
       <header class="shortcut-help-header">

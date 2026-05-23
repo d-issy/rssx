@@ -43,32 +43,27 @@
   {%- endmacro %}
 
   <div class="sidebar-section">
-    <div class="sidebar-heading">フィード</div>
+    <div class="sidebar-heading sidebar-heading-row">
+      <span>フィード</span>
+      <button type="button" class="sidebar-add" id="add-feed-open" aria-label="フィードを追加" title="フィードを追加">＋</button>
+    </div>
     <ul class="folder-tree">
       {% for node in folder_tree %}{{ render_folder(node) }}{% endfor %}
-      {% if orphan_feeds %}
-        <li class="folder-node">
-          <details data-folder-id="__orphan"{% if not folder_tree %} open{% endif %}>
-            <summary class="folder-summary {% if scope == 'orphan' %}active{% endif %}">
-              <span class="folder-chevron" aria-hidden="true"></span>
-              <a class="folder-link" href="/?scope=orphan"
-                 onclick="event.preventDefault(); location.href = this.href;">
-                <span class="truncate">未分類</span>
-              </a>
-              {% if orphan_unread %}<span class="badge">{{ orphan_unread }}</span>{% endif %}
-            </summary>
-            <ul class="folder-contents">
-              {% for feed in orphan_feeds %}{{ render_feed(feed) }}{% endfor %}
-            </ul>
-          </details>
+      {% for feed in orphan_feeds %}
+        <li class="root-feed">
+          <a class="sidebar-link feed-link feed-link-root {% if scope == 'feed' and current_feed_id == feed.id %}active{% endif %}"
+             href="/?scope=feed&feed={{ feed.id }}">
+            <span class="truncate">{{ feed.title }}</span>
+            {% if feed.unread_count %}<span class="badge">{{ feed.unread_count }}</span>{% endif %}
+          </a>
         </li>
-      {% endif %}
+      {% endfor %}
     </ul>
   </div>
 
   </div>
   <div class="sidebar-footer">
-    <a class="sidebar-link" href="/manage">⚙ 管理</a>
+    <a class="sidebar-link" href="/manage" id="manage-open">⚙ 管理</a>
     <p class="sidebar-hint"><kbd>?</kbd> でショートカット一覧</p>
   </div>
 </nav>

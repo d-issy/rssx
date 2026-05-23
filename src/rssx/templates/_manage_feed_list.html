@@ -1,0 +1,20 @@
+{% if feeds %}
+<table class="manage-feed-table">
+  <thead>
+    <tr>
+      <th class="col-title">タイトル</th>
+      <th class="col-url">URL</th>
+      <th class="col-folder">フォルダ</th>
+      <th class="col-meta">取得状況</th>
+      <th class="col-actions" aria-label="操作"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for feed in feeds %}
+      {% include "_manage_feed_row.html" %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="manage-empty">該当するフィードがありません。</p>
+{% endif %}

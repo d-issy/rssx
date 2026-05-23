@@ -96,6 +96,99 @@ def list_feeds(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def list_feeds_filtered(
+    conn: sqlite3.Connection,
+    *,
+    query: str = "",
+    folder_ids: list[int] | None = None,
+    include_orphan: bool = True,
+) -> list[sqlite3.Row]:
+    where: list[str] = []
+    params: list[Any] = []
+
+    # folder_ids is None means "no folder filter applied at all" (show every feed).
+    # Only when folder_ids is given do we narrow by folder / orphan.
+    if folder_ids is not None:
+        folder_clauses: list[str] = []
+        if folder_ids:
+            placeholders = ",".join("?" for _ in folder_ids)
+            folder_clauses.append(f"f.folder_id IN ({placeholders})")
+            params.extend(folder_ids)
+        if include_orphan:
+            folder_clauses.append("f.folder_id IS NULL")
+        if folder_clauses:
+            where.append("(" + " OR ".join(folder_clauses) + ")")
+        else:
+            where.append("1 = 0")
+
+    q = query.strip()
+    if q:
+        like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        where.append(
+            "(LOWER(f.title) LIKE LOWER(?) ESCAPE '\\' "
+            "OR LOWER(f.url) LIKE LOWER(?) ESCAPE '\\' "
+            "OR LOWER(COALESCE(f.site_url, '')) LIKE LOWER(?) ESCAPE '\\')"
+        )
+        params.extend([like, like, like])
+
+    where_sql = "WHERE " + " AND ".join(where) if where else ""
+    sql = f"""
+        SELECT f.id, f.url, f.title, f.site_url, f.folder_id, f.last_fetched_at,
+               f.next_fetch_at, f.last_error,
+               COALESCE(u.unread, 0) AS unread_count
+        FROM feeds f
+        LEFT JOIN (
+            SELECT feed_id, COUNT(*) AS unread
+            FROM entries WHERE is_read = 0 GROUP BY feed_id
+        ) u ON u.feed_id = f.id
+        {where_sql}
+        ORDER BY f.id DESC
+    """
+    return conn.execute(sql, params).fetchall()
+
+
+def list_folders_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT fo.id, fo.name, fo.parent_id, fo.position,
+               COALESCE(fc.cnt, 0) AS feed_count
+        FROM folders fo
+        LEFT JOIN (
+            SELECT folder_id, COUNT(*) AS cnt FROM feeds
+            WHERE folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) fc ON fc.folder_id = fo.id
+        ORDER BY LOWER(fo.name)
+        """
+    ).fetchall()
+
+
+def get_folder(conn: sqlite3.Connection, folder_id: int) -> sqlite3.Row | None:
+    row: sqlite3.Row | None = conn.execute(
+        """
+        SELECT fo.id, fo.name, fo.parent_id, fo.position,
+               COALESCE((SELECT COUNT(*) FROM feeds WHERE folder_id = fo.id), 0) AS feed_count
+        FROM folders fo WHERE fo.id = ?
+        """,
+        (folder_id,),
+    ).fetchone()
+    return row
+
+
+def get_feed(conn: sqlite3.Connection, feed_id: int) -> sqlite3.Row | None:
+    row: sqlite3.Row | None = conn.execute(
+        """
+        SELECT f.id, f.url, f.title, f.site_url, f.folder_id, f.last_fetched_at,
+               f.next_fetch_at, f.last_error,
+               COALESCE((SELECT COUNT(*) FROM entries WHERE feed_id = f.id AND is_read = 0), 0)
+                   AS unread_count
+        FROM feeds f WHERE f.id = ?
+        """,
+        (feed_id,),
+    ).fetchone()
+    return row
+
+
 def descendant_folder_ids(conn: sqlite3.Connection, folder_id: int) -> list[int]:
     ids = [folder_id]
     stack = [folder_id]
@@ -214,6 +307,17 @@ def add_folder(conn: sqlite3.Connection, name: str, parent_id: int | None = None
 def delete_folder(conn: sqlite3.Connection, folder_id: int) -> None:
     with transaction(conn):
         conn.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+
+
+def delete_folder_cascade(conn: sqlite3.Connection, folder_id: int) -> None:
+    with transaction(conn):
+        conn.execute("DELETE FROM feeds WHERE folder_id = ?", (folder_id,))
+        conn.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+
+
+def rename_folder(conn: sqlite3.Connection, folder_id: int, name: str) -> None:
+    with transaction(conn):
+        conn.execute("UPDATE folders SET name = ? WHERE id = ?", (name.strip(), folder_id))
 
 
 def add_feed(

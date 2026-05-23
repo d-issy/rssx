@@ -10,6 +10,7 @@ import {
 } from "./entries";
 import { toggleCurrentFolder } from "./folders";
 import { isHelpOpen, toggleHelp } from "./help-dialog";
+import { isOpen as isManageOpen } from "./manage-dialog";
 import { navItem } from "./sidebar-nav";
 
 function focusSearch(): void {
@@ -88,8 +89,8 @@ export function install(): void {
       toggleHelp();
       return;
     }
-    // While help is open, let the <dialog> handle Esc itself; ignore other keys.
-    if (isHelpOpen()) return;
+    // While a dialog is open, let it handle Esc itself; ignore other keys.
+    if (isHelpOpen() || isManageOpen()) return;
     if (handleSidebarShortcut(ev)) {
       ev.preventDefault();
       return;
