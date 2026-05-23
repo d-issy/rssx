@@ -30,6 +30,10 @@ function apply(root: ParentNode | null | undefined): void {
   });
 }
 
+export function refresh(root?: ParentNode | null): void {
+  apply(root);
+}
+
 export function install(): void {
   document.addEventListener("DOMContentLoaded", () => apply(document));
   if (document.body) apply(document.body);

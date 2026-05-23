@@ -16,7 +16,7 @@
             hx-target="#manage-feed-{{ feed.id }}"
             hx-swap="outerHTML"
             name="folder_id">
-      <option value="" {% if not feed.folder_id %}selected{% endif %}>(未分類)</option>
+      <option value="__none" {% if not feed.folder_id %}selected{% endif %}>(未分類)</option>
       {% for f in folders %}
         <option value="{{ f.id }}" {% if feed.folder_id == f.id %}selected{% endif %}>{{ f.name }}</option>
       {% endfor %}

@@ -14,6 +14,23 @@ dev:
     pnpm dev &
     wait
 
+# Run unit tests
+test: test-backend test-frontend
+
+test-backend:
+    uv run pytest
+
+test-frontend:
+    pnpm test
+
+cov: cov-backend cov-frontend
+
+cov-backend:
+    uv run pytest --cov
+
+cov-frontend:
+    pnpm test:cov
+
 # Lint everything (backend + frontend)
 lint: lint-backend lint-frontend
 

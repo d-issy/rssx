@@ -20,6 +20,8 @@ Common tasks are exposed via [`just`](https://github.com/casey/just):
 | `just` | List available recipes |
 | `just run` | Start the server |
 | `just dev` | Start the dev server with hot reload |
+| `just test` | Run unit tests |
+| `just cov` | Run unit tests with coverage |
 | `just lint` | Run ruff check + format check + mypy |
 | `just fmt` | Format code |
 | `just fix` | Auto-fix lint issues and format |
