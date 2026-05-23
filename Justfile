@@ -10,9 +10,9 @@ dev:
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT INT TERM
-    RSSX_DEV=1 uv run rssx &
+    uv run watchfiles --filter python 'uv run rssx' src/rssx &
     pnpm dev &
-    wait -n
+    wait
 
 # Lint everything (backend + frontend)
 lint: lint-backend lint-frontend
