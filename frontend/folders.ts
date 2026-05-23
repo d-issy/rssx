@@ -60,7 +60,8 @@ export function currentFolderIdFromUrl(): string | null {
   const params = new URLSearchParams(location.search);
   const scope = params.get("scope");
   if (scope === "folder") return params.get("folder");
-  if (scope === "orphan") return "__orphan";
+  // Orphan feeds live at sidebar root (no enclosing <details>). There is no
+  // collapsible group to identify.
   if (scope === "feed") {
     const fid = params.get("feed");
     const link = Array.from(

@@ -14,7 +14,10 @@ function format(date: Date): string {
 
 function apply(root: ParentNode | null | undefined): void {
   const scope: ParentNode = root ?? document;
-  const nodes = scope.querySelectorAll<HTMLTimeElement>("time[datetime]");
+  // Skip elements owned by relative-time.ts (data-relative). Those have their
+  // own formatter and would otherwise be overwritten when this listener fires
+  // after htmx:afterSwap.
+  const nodes = scope.querySelectorAll<HTMLTimeElement>("time[datetime]:not([data-relative])");
   nodes.forEach((el) => {
     if (el.dataset.localized === "1") return;
     const iso = el.getAttribute("datetime");
