@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class EntryDraft:
+class ParsedEntry:
     guid: str
     title: str
     url: str | None
@@ -16,4 +16,4 @@ class EntryDraft:
 class ParsedFeed:
     title: str
     site_url: str | None
-    entries: list[EntryDraft]
+    entries: list[ParsedEntry]

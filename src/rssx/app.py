@@ -1,35 +1,31 @@
 import asyncio
 import logging
-import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from . import repository as repo
 from .config import Config
 from .db import connect, init_schema
+from .lib.env import is_dev_mode
 from .lib.feeds.scheduling import FetchConfig
 from .lib.htmx import add_trigger, is_htmx
+from .lib.templates import create_templates
 from .usecases.feed_sync import fetch_all, fetch_due_feeds, fetch_feed
-from .usecases.manage import ManageUseCases
+from .usecases.manage_feeds import FeedManagementUseCases
+from .usecases.manage_folders import FolderManagementUseCases
 from .usecases.results import ApplicationError
 
 log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-DEV_MODE = bool(os.environ.get("RSSX_DEV"))
-TEMPLATES.env.globals["dev_mode"] = DEV_MODE
 
 
 @dataclass(frozen=True)
@@ -41,49 +37,9 @@ class IndexScope:
     query: str
 
 
-def _resolve_tz(name: str):
-    if name == "local":
-        return datetime.now().astimezone().tzinfo
-    try:
-        return ZoneInfo(name)
-    except ZoneInfoNotFoundError:
-        log.warning("unknown timezone %r, falling back to system local", name)
-        return datetime.now().astimezone().tzinfo
-
-
-def _parse_stored(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace(" ", "T"))
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-    return dt.astimezone(ZoneInfo("UTC"))
-
-
-def _make_filters(tz):
-    def iso_utc(value: str | None) -> str:
-        dt = _parse_stored(value)
-        if dt is None:
-            return ""
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    def fmt_dt(value: str | None) -> str:
-        dt = _parse_stored(value)
-        if dt is None:
-            return ""
-        return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-
-    return iso_utc, fmt_dt
-
-
 def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) -> FastAPI:
     config = config or Config.load()
-    iso_utc, fmt_dt = _make_filters(_resolve_tz(config.timezone))
-    TEMPLATES.env.filters["iso_utc"] = iso_utc
-    TEMPLATES.env.filters["fmt_dt"] = fmt_dt
+    templates = create_templates(BASE_DIR, timezone=config.timezone)
     conn = connect(config.db_path)
     init_schema(conn)
 
@@ -94,7 +50,8 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     )
 
     scheduler = AsyncIOScheduler()
-    manage_usecases = ManageUseCases(conn, fetch_cfg)
+    feed_usecases = FeedManagementUseCases(conn, fetch_cfg)
+    folder_usecases = FolderManagementUseCases(conn)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -120,12 +77,14 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
     def render_index(
-        request: Request, scope_args: IndexScope, entries: list[sqlite3.Row]
+        request: Request,
+        scope_args: IndexScope,
+        entries: list[sqlite3.Row],
     ) -> HTMLResponse:
         folders = repo.list_folders(conn)
         feeds = repo.list_feeds(conn)
         folder_tree, orphan_feeds, orphan_unread = repo.build_sidebar_tree(folders, feeds)
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "index.html",
             {
@@ -171,7 +130,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         entry = repo.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
-        return TEMPLATES.TemplateResponse(request, "_entry_body.html", {"entry": entry})
+        return templates.TemplateResponse(request, "_entry_body.html", {"entry": entry})
 
     @app.post("/entries/{entry_id}/read", response_class=HTMLResponse)
     def entry_read(request: Request, entry_id: int, value: int = 1):
@@ -179,7 +138,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         entry = repo.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
-        resp = TEMPLATES.TemplateResponse(request, "_entry_row.html", {"entry": entry})
+        resp = templates.TemplateResponse(request, "_entry_row.html", {"entry": entry})
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
 
@@ -189,7 +148,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         entry = repo.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
-        resp = TEMPLATES.TemplateResponse(request, "_entry_row.html", {"entry": entry})
+        resp = templates.TemplateResponse(request, "_entry_row.html", {"entry": entry})
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
 
@@ -203,7 +162,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         folders = repo.list_folders(conn)
         feeds = repo.list_feeds(conn)
         folder_tree, orphan_feeds, orphan_unread = repo.build_sidebar_tree(folders, feeds)
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "_sidebar.html",
             {
@@ -245,7 +204,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return RedirectResponse("/", status_code=303)
 
     def _render_feed_list(request: Request, feeds, folders):
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "_manage_feed_list.html",
             {"feeds": feeds, "folders": folders},
@@ -255,7 +214,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         feed = repo.get_feed(conn, feed_id)
         if not feed:
             raise HTTPException(404)
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "_manage_feed_row.html",
             {"feed": feed, "folders": repo.list_folders(conn)},
@@ -265,7 +224,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         folder = repo.get_folder(conn, folder_id)
         if not folder:
             raise HTTPException(404)
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "_manage_folder_row.html",
             {"f": folder},
@@ -282,11 +241,11 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
             "feeds": feeds,
         }
         template = "_manage_dialog.html" if is_htmx(request) else "manage.html"
-        return TEMPLATES.TemplateResponse(request, template, ctx)
+        return templates.TemplateResponse(request, template, ctx)
 
     @app.get("/manage/folders", response_class=HTMLResponse)
     def manage_folders(request: Request):
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "_manage_folder_list.html",
             {"folders": repo.list_folders_with_counts(conn)},
@@ -318,7 +277,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
 
     @app.get("/add-feed", response_class=HTMLResponse)
     def add_feed_form(request: Request):
-        return TEMPLATES.TemplateResponse(
+        return templates.TemplateResponse(
             request,
             "_add_feed_dialog.html",
             {"folders": repo.list_folders(conn)},
@@ -330,11 +289,11 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         name: Annotated[str, Form()],
     ):
         try:
-            result = manage_usecases.create_folder(name)
+            result = folder_usecases.create_folder(name)
         except ApplicationError as e:
             raise _http_error(e) from e
         if is_htmx(request):
-            resp = TEMPLATES.TemplateResponse(
+            resp = templates.TemplateResponse(
                 request,
                 "_manage_folder_list.html",
                 {"folders": repo.list_folders_with_counts(conn)},
@@ -350,7 +309,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         name: Annotated[str, Form()],
     ):
         try:
-            result = manage_usecases.rename_folder(folder_id, name)
+            result = folder_usecases.rename_folder(folder_id, name)
         except ApplicationError as e:
             raise _http_error(e) from e
         if is_htmx(request):
@@ -365,7 +324,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         folder_id: int,
         mode: Annotated[str, Form()] = "detach",
     ):
-        result = manage_usecases.delete_folder(folder_id, mode)
+        result = folder_usecases.delete_folder(folder_id, mode)
         if is_htmx(request):
             resp = HTMLResponse("")
             add_trigger(resp, *result.events)
@@ -381,7 +340,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         new_folder_name: Annotated[str | None, Form()] = None,
     ):
         try:
-            result = manage_usecases.create_feed(
+            result = feed_usecases.create_feed(
                 url=url,
                 title=title,
                 folder_id=folder_id,
@@ -397,14 +356,14 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
 
     @app.post("/feeds/{feed_id}/delete")
     def feed_delete(request: Request, feed_id: int):
-        result = manage_usecases.delete_feed(feed_id)
+        result = feed_usecases.delete_feed(feed_id)
         if is_htmx(request):
             resp = HTMLResponse("")
             add_trigger(resp, *result.events)
             return resp
         return RedirectResponse("/manage", status_code=303)
 
-    if DEV_MODE:
+    if is_dev_mode():
 
         @app.get("/__dev/ping")
         async def dev_ping():
@@ -423,7 +382,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         title: Annotated[str | None, Form()] = None,
         folder_id: Annotated[str, Form()] = "__unchanged",
     ):
-        result = manage_usecases.edit_feed(feed_id, title=title, folder_id=folder_id)
+        result = feed_usecases.edit_feed(feed_id, title=title, folder_id=folder_id)
         if is_htmx(request):
             resp = _render_feed_row(request, feed_id)
             add_trigger(resp, *result.events)

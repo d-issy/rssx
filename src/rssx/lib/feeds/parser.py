@@ -5,7 +5,7 @@ from time import struct_time
 
 import feedparser
 
-from rssx.lib.feeds.models import EntryDraft, ParsedFeed
+from rssx.lib.feeds.models import ParsedEntry, ParsedFeed
 
 
 def _to_iso(dt: datetime | None) -> str | None:
@@ -57,9 +57,9 @@ def _content_html(entry: feedparser.FeedParserDict) -> str:
     return _str_or_empty(entry.get("summary"))
 
 
-def extract_entry_draft(entry: feedparser.FeedParserDict) -> EntryDraft:
+def parse_entry(entry: feedparser.FeedParserDict) -> ParsedEntry:
     summary = _str_or_empty(entry.get("summary"))
-    return EntryDraft(
+    return ParsedEntry(
         guid=_make_guid(entry),
         title=_str_or_empty(entry.get("title")).strip(),
         url=_optional_str(entry.get("link")),
@@ -80,5 +80,5 @@ def parse_feed(text: str, *, fallback_title: str) -> ParsedFeed:
     return ParsedFeed(
         title=title,
         site_url=site_url,
-        entries=[extract_entry_draft(entry) for entry in parsed.entries],
+        entries=[parse_entry(entry) for entry in parsed.entries],
     )

@@ -1,15 +1,29 @@
 import logging
 import sqlite3
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from rssx import repository as repo
-from rssx.domain.entities import DomainError, FeedDraft, FeedUrl, FolderSelection
+from rssx.domain.errors import DomainError
 from rssx.domain.events import DomainEvent
+from rssx.domain.value_objects import FeedUrl, FolderSelection
 from rssx.lib.feeds.scheduling import FetchConfig
 from rssx.usecases.feed_sync import fetch_feed, probe_feed_title
 from rssx.usecases.results import ApplicationError, FeedCreateResult, OperationResult
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _FeedCreateData:
+    url: FeedUrl
+    title: str
+    site_url: str | None
+    folder_selection: FolderSelection
+
+    @property
+    def normalized_title(self) -> str:
+        return self.title.strip()
 
 
 class FeedManagementUseCases:
@@ -34,34 +48,32 @@ class FeedManagementUseCases:
         folder_id: str | None = None,
         new_folder_name: str | None = None,
     ) -> FeedCreateResult:
-        draft = self._build_feed_draft(
+        data = self._build_feed_create_data(
             url=url,
             title=title,
             folder_id=folder_id,
             new_folder_name=new_folder_name,
         )
 
-        existing = self.conn.execute(
-            "SELECT id, title FROM feeds WHERE url = ?", (draft.url.value,)
-        ).fetchone()
+        existing = repo.get_feed_by_url(self.conn, data.url.value)
         if existing:
             raise ApplicationError(f"このURLは既に登録されています: {existing['title']}")
 
         try:
             feed_id = repo.add_feed(
                 self.conn,
-                url=draft.url.value,
-                title=draft.normalized_title,
-                site_url=draft.site_url,
-                folder_id=draft.folder_selection.folder_id,
+                url=data.url.value,
+                title=data.normalized_title,
+                site_url=data.site_url,
+                folder_id=data.folder_selection.folder_id,
             )
         except sqlite3.IntegrityError as e:
             raise ApplicationError("このURLは既に登録されています") from e
 
-        if draft.folder_selection.new_folder_name is not None:
+        if data.folder_selection.new_folder_name is not None:
             target_folder_id = repo.add_folder(
                 self.conn,
-                draft.folder_selection.new_folder_name.value,
+                data.folder_selection.new_folder_name.value,
                 None,
             )
             repo.update_feed_folder(self.conn, feed_id, target_folder_id)
@@ -69,7 +81,7 @@ class FeedManagementUseCases:
         try:
             self.fetch_feed(self.conn, feed_id, self.fetch_cfg)
         except Exception:
-            log.exception("initial fetch failed for new feed %s", draft.url.value)
+            log.exception("initial fetch failed for new feed %s", data.url.value)
 
         return FeedCreateResult(
             events=(
@@ -100,14 +112,14 @@ class FeedManagementUseCases:
             events.append(DomainEvent.FEED_FOLDER_CHANGED)
         return OperationResult(tuple(events))
 
-    def _build_feed_draft(
+    def _build_feed_create_data(
         self,
         *,
         url: str,
         title: str,
         folder_id: str | None,
         new_folder_name: str | None,
-    ) -> FeedDraft:
+    ) -> _FeedCreateData:
         feed_url = self._to_application_error(lambda: FeedUrl.from_raw(url))
         selection = self._to_application_error(
             lambda: FolderSelection.from_form(folder_id, new_folder_name)
@@ -121,7 +133,7 @@ class FeedManagementUseCases:
             except Exception as e:
                 raise ApplicationError(f"フィードを読み込めませんでした: {e}") from e
 
-        return FeedDraft(
+        return _FeedCreateData(
             url=feed_url,
             title=resolved_title,
             site_url=site_url,

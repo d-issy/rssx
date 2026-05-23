@@ -1,6 +1,7 @@
 import pytest
 
-from rssx.domain.entities import DomainError, FeedUrl, FolderName, FolderSelection
+from rssx.domain.errors import DomainError
+from rssx.domain.value_objects import FeedUrl, FolderName, FolderSelection
 
 
 def test_feed_url_rejects_blank() -> None:

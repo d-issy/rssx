@@ -6,7 +6,7 @@ from factories import seed_feed
 from rssx.db import connect, init_schema
 from rssx.domain.events import DomainEvent
 from rssx.lib.feeds.scheduling import FetchConfig
-from rssx.usecases.manage import ManageUseCases
+from rssx.usecases.manage_feeds import FeedManagementUseCases
 from rssx.usecases.results import ApplicationError
 
 
@@ -19,7 +19,7 @@ def test_create_feed_with_new_folder_is_unit_testable_without_http(db_path: Path
     fetched: list[int] = []
     try:
         init_schema(conn)
-        service = ManageUseCases(
+        service = FeedManagementUseCases(
             conn,
             fetch_cfg(),
             fetch_feed_fn=lambda _conn, feed_id, _cfg: fetched.append(feed_id),
@@ -48,7 +48,7 @@ def test_duplicate_feed_does_not_create_requested_new_folder(db_path: Path) -> N
     seed_feed(db_path, url="https://example.com/existing.xml")
     conn = connect(db_path)
     try:
-        service = ManageUseCases(conn, fetch_cfg(), fetch_feed_fn=lambda *_args: None)
+        service = FeedManagementUseCases(conn, fetch_cfg(), fetch_feed_fn=lambda *_args: None)
 
         with pytest.raises(ApplicationError):
             service.create_feed(
@@ -69,7 +69,7 @@ def test_edit_feed_reports_folder_changed_event_only_when_folder_changes(db_path
     assert folder_id is not None
     conn = connect(db_path)
     try:
-        service = ManageUseCases(conn, fetch_cfg(), fetch_feed_fn=lambda *_args: None)
+        service = FeedManagementUseCases(conn, fetch_cfg(), fetch_feed_fn=lambda *_args: None)
 
         title_only = service.edit_feed(feed_id, title="Renamed")
         folder_edit = service.edit_feed(feed_id, folder_id="__none")

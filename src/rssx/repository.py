@@ -1,6 +1,8 @@
 import sqlite3
 from dataclasses import dataclass, field
 
+from rssx.lib.feeds.models import ParsedEntry
+
 from .db import transaction
 
 SqlParam = str | int | float | bytes | None
@@ -18,6 +20,14 @@ class FolderTreeNode:
     def __getitem__(self, key: str) -> object:
         """Compatibility for older tests/call sites that used dict-style nodes."""
         return getattr(self, key)
+
+
+@dataclass(frozen=True)
+class FeedFetchState:
+    id: int
+    url: str
+    etag: str | None
+    last_modified: str | None
 
 
 def list_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -199,6 +209,29 @@ def get_feed(conn: sqlite3.Connection, feed_id: int) -> sqlite3.Row | None:
     return row
 
 
+def get_feed_by_url(conn: sqlite3.Connection, url: str) -> sqlite3.Row | None:
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT id, title FROM feeds WHERE url = ?",
+        (url,),
+    ).fetchone()
+    return row
+
+
+def get_feed_fetch_state(conn: sqlite3.Connection, feed_id: int) -> FeedFetchState | None:
+    row = conn.execute(
+        "SELECT id, url, etag, last_modified FROM feeds WHERE id = ?",
+        (feed_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return FeedFetchState(
+        id=row["id"],
+        url=row["url"],
+        etag=row["etag"],
+        last_modified=row["last_modified"],
+    )
+
+
 def descendant_folder_ids(conn: sqlite3.Connection, folder_id: int) -> list[int]:
     ids = [folder_id]
     stack = [folder_id]
@@ -363,6 +396,126 @@ def update_feed_title(conn: sqlite3.Connection, feed_id: int, title: str) -> Non
 def update_feed_folder(conn: sqlite3.Connection, feed_id: int, folder_id: int | None) -> None:
     with transaction(conn):
         conn.execute("UPDATE feeds SET folder_id = ? WHERE id = ?", (folder_id, feed_id))
+
+
+def record_feed_fetch_failure(
+    conn: sqlite3.Connection,
+    feed_id: int,
+    *,
+    error: str,
+    fetched_at: str,
+    next_fetch_at: str,
+) -> None:
+    with transaction(conn):
+        conn.execute(
+            "UPDATE feeds SET last_error = ?, last_fetched_at = ?, next_fetch_at = ? WHERE id = ?",
+            (error, fetched_at, next_fetch_at, feed_id),
+        )
+
+
+def insert_parsed_entry(conn: sqlite3.Connection, feed_id: int, entry: ParsedEntry) -> bool:
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO entries
+                (feed_id, guid, title, url, author, content, summary, published_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                feed_id,
+                entry.guid,
+                entry.title,
+                entry.url,
+                entry.author,
+                entry.content,
+                entry.summary,
+                entry.published_at,
+            ),
+        )
+    except sqlite3.IntegrityError:
+        return False
+    return cur.rowcount > 0
+
+
+def update_feed_cache_headers(
+    conn: sqlite3.Connection,
+    feed_id: int,
+    *,
+    etag: str | None,
+    last_modified: str | None,
+) -> None:
+    if etag or last_modified:
+        conn.execute(
+            "UPDATE feeds SET etag = ?, last_modified = ? WHERE id = ?",
+            (etag, last_modified, feed_id),
+        )
+
+
+def store_fetched_entries(
+    conn: sqlite3.Connection,
+    feed_id: int,
+    entries: list[ParsedEntry],
+    *,
+    etag: str | None,
+    last_modified: str | None,
+) -> int:
+    new_count = 0
+    with transaction(conn):
+        for entry in entries:
+            if insert_parsed_entry(conn, feed_id, entry):
+                new_count += 1
+        update_feed_cache_headers(conn, feed_id, etag=etag, last_modified=last_modified)
+    return new_count
+
+
+def list_recent_published_at(conn: sqlite3.Connection, feed_id: int, *, limit: int) -> list[str]:
+    rows = conn.execute(
+        "SELECT published_at FROM entries WHERE feed_id = ? AND published_at IS NOT NULL "
+        "ORDER BY published_at DESC LIMIT ?",
+        (feed_id, limit),
+    ).fetchall()
+    return [row["published_at"] for row in rows]
+
+
+def get_consecutive_empty(conn: sqlite3.Connection, feed_id: int) -> int:
+    row = conn.execute(
+        "SELECT consecutive_empty FROM feeds WHERE id = ?",
+        (feed_id,),
+    ).fetchone()
+    if row is None:
+        return 0
+    return int(row["consecutive_empty"] or 0)
+
+
+def record_feed_fetch_success(
+    conn: sqlite3.Connection,
+    feed_id: int,
+    *,
+    fetched_at: str,
+    next_fetch_at: str,
+    fetch_interval_sec: int,
+    consecutive_empty: int,
+) -> None:
+    with transaction(conn):
+        conn.execute(
+            "UPDATE feeds SET last_fetched_at = ?, next_fetch_at = ?, "
+            "fetch_interval_sec = ?, consecutive_empty = ?, last_error = NULL "
+            "WHERE id = ?",
+            (fetched_at, next_fetch_at, fetch_interval_sec, consecutive_empty, feed_id),
+        )
+
+
+def list_due_feed_ids(conn: sqlite3.Connection, *, now: str) -> list[int]:
+    rows = conn.execute(
+        "SELECT id FROM feeds WHERE next_fetch_at IS NULL OR next_fetch_at <= ?",
+        (now,),
+    ).fetchall()
+    return [row["id"] for row in rows]
+
+
+def list_feed_ids(conn: sqlite3.Connection) -> list[int]:
+    rows = conn.execute("SELECT id FROM feeds").fetchall()
+    return [row["id"] for row in rows]
 
 
 def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> list[sqlite3.Row]:

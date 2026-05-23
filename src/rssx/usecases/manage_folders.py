@@ -2,8 +2,9 @@ import sqlite3
 from collections.abc import Callable
 
 from rssx import repository as repo
-from rssx.domain.entities import DomainError, FolderName
+from rssx.domain.errors import DomainError
 from rssx.domain.events import DomainEvent
+from rssx.domain.value_objects import FolderName
 from rssx.usecases.results import ApplicationError, OperationResult
 
 
