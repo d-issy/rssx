@@ -474,13 +474,13 @@ def create_app(config: Config | None = None) -> FastAPI:
         request: Request,
         feed_id: int,
         title: Annotated[str | None, Form()] = None,
-        folder_id: Annotated[str | None, Form()] = None,
+        folder_id: Annotated[str, Form()] = "__unchanged",
     ):
         folder_changed = False
         if title is not None:
             q.update_feed_title(conn, feed_id, title)
-        if folder_id is not None:
-            new_folder = int(folder_id) if folder_id != "" else None
+        if folder_id != "__unchanged":
+            new_folder = None if folder_id == "__none" else int(folder_id)
             q.update_feed_folder(conn, feed_id, new_folder)
             folder_changed = True
         if _is_htmx(request):

@@ -12,6 +12,11 @@ result-*
 *.db-shm
 .DS_Store
 
+# Test / coverage
+.coverage
+htmlcov/
+coverage/
+
 # Frontend
 node_modules/
 src/rssx/static/dist/

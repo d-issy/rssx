@@ -27,6 +27,8 @@ packages = ["src/rssx"]
 dev = [
   "ruff>=0.7",
   "mypy>=1.13",
+  "pytest>=8",
+  "pytest-cov>=7",
 ]
 
 [tool.ruff]
@@ -49,6 +51,16 @@ ignore = [
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["rssx"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
 
 [tool.mypy]
 python_version = "3.14"
