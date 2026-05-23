@@ -1,7 +1,9 @@
 import asyncio
 import logging
 import os
+import sqlite3
 from contextlib import asynccontextmanager
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
@@ -16,13 +18,9 @@ from fastapi.templating import Jinja2Templates
 from . import repository as repo
 from .config import Config
 from .db import connect, init_schema
-from .fetcher import (
-    FetchConfig,
-    fetch_all,
-    fetch_due_feeds,
-    fetch_feed,
-)
-from .htmx import add_trigger, is_htmx
+from .lib.feeds.scheduling import FetchConfig
+from .lib.htmx import add_trigger, is_htmx
+from .usecases.feed_sync import fetch_all, fetch_due_feeds, fetch_feed
 from .usecases.manage import ManageUseCases
 from .usecases.results import ApplicationError
 
@@ -32,6 +30,15 @@ BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 DEV_MODE = bool(os.environ.get("RSSX_DEV"))
 TEMPLATES.env.globals["dev_mode"] = DEV_MODE
+
+
+@dataclass(frozen=True)
+class IndexScope:
+    scope: str
+    current_folder_id: int | None
+    current_feed_id: int | None
+    unread_only: bool
+    query: str
 
 
 def _resolve_tz(name: str):
@@ -81,9 +88,9 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     init_schema(conn)
 
     fetch_cfg = FetchConfig(
-        min_interval_sec=config.min_interval_min * 60,
-        max_interval_sec=config.max_interval_min * 60,
-        initial_interval_sec=config.initial_interval_min * 60,
+        min_interval_min=config.min_interval_min,
+        max_interval_min=config.max_interval_min,
+        initial_interval_min=config.initial_interval_min,
     )
 
     scheduler = AsyncIOScheduler()
@@ -112,7 +119,9 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     app = FastAPI(lifespan=lifespan, title="rssx")
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-    def render_index(request: Request, scope_args: dict, entries):
+    def render_index(
+        request: Request, scope_args: IndexScope, entries: list[sqlite3.Row]
+    ) -> HTMLResponse:
         folders = repo.list_folders(conn)
         feeds = repo.list_feeds(conn)
         folder_tree, orphan_feeds, orphan_unread = repo.build_sidebar_tree(folders, feeds)
@@ -126,7 +135,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
                 "entries": entries,
                 "unread_total": repo.get_unread_total(conn),
                 "starred_total": repo.get_starred_total(conn),
-                **scope_args,
+                **asdict(scope_args),
             },
         )
 
@@ -147,13 +156,13 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         )
         return render_index(
             request,
-            {
-                "scope": scope,
-                "current_folder_id": folder,
-                "current_feed_id": feed,
-                "unread_only": bool(unread),
-                "query": "",
-            },
+            IndexScope(
+                scope=scope,
+                current_folder_id=folder,
+                current_feed_id=feed,
+                unread_only=bool(unread),
+                query="",
+            ),
             entries,
         )
 
@@ -215,13 +224,13 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         rows = repo.search_entries(conn, query) if query else []
         return render_index(
             request,
-            {
-                "scope": "search",
-                "current_folder_id": None,
-                "current_feed_id": None,
-                "unread_only": False,
-                "query": query,
-            },
+            IndexScope(
+                scope="search",
+                current_folder_id=None,
+                current_feed_id=None,
+                unread_only=False,
+                query=query,
+            ),
             rows,
         )
 

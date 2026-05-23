@@ -1,6 +1,6 @@
 from fastapi.responses import HTMLResponse
 
-from rssx.htmx import HtmxEvent, add_trigger, trigger_names
+from rssx.lib.htmx import HtmxEvent, add_trigger, trigger_names
 
 
 def test_add_trigger_merges_existing_json_header() -> None:

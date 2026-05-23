@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from rssx.app import create_app
 from rssx.config import Config
-from rssx.htmx import HtmxEvent, trigger_names
+from rssx.lib.htmx import HtmxEvent, trigger_names
 
 
 def make_client(db_path: Path) -> TestClient:

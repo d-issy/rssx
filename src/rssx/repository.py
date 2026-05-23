@@ -1,7 +1,23 @@
 import sqlite3
-from typing import Any
+from dataclasses import dataclass, field
 
 from .db import transaction
+
+SqlParam = str | int | float | bytes | None
+
+
+@dataclass
+class FolderTreeNode:
+    id: int
+    name: str
+    parent_id: int | None
+    children: list[FolderTreeNode] = field(default_factory=list)
+    feeds: list[sqlite3.Row] = field(default_factory=list)
+    unread_count: int = 0
+
+    def __getitem__(self, key: str) -> object:
+        """Compatibility for older tests/call sites that used dict-style nodes."""
+        return getattr(self, key)
 
 
 def list_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -10,34 +26,27 @@ def list_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def build_folder_tree(folders: list[sqlite3.Row]) -> list[dict]:
-    by_id: dict[int, dict] = {
-        f["id"]: {"id": f["id"], "name": f["name"], "parent_id": f["parent_id"], "children": []}
+def build_folder_tree(folders: list[sqlite3.Row]) -> list[FolderTreeNode]:
+    by_id = {
+        f["id"]: FolderTreeNode(id=f["id"], name=f["name"], parent_id=f["parent_id"])
         for f in folders
     }
-    roots: list[dict] = []
+    roots: list[FolderTreeNode] = []
     for node in by_id.values():
-        parent = node["parent_id"]
+        parent = node.parent_id
         if parent is None or parent not in by_id:
             roots.append(node)
         else:
-            by_id[parent]["children"].append(node)
+            by_id[parent].children.append(node)
     return roots
 
 
 def build_sidebar_tree(
     folders: list[sqlite3.Row],
     feeds: list[sqlite3.Row],
-) -> tuple[list[dict], list[sqlite3.Row], int]:
-    by_id: dict[int, dict] = {
-        f["id"]: {
-            "id": f["id"],
-            "name": f["name"],
-            "parent_id": f["parent_id"],
-            "children": [],
-            "feeds": [],
-            "unread_count": 0,
-        }
+) -> tuple[list[FolderTreeNode], list[sqlite3.Row], int]:
+    by_id = {
+        f["id"]: FolderTreeNode(id=f["id"], name=f["name"], parent_id=f["parent_id"])
         for f in folders
     }
 
@@ -48,30 +57,30 @@ def build_sidebar_tree(
             if cur in seen:
                 return True
             seen.add(cur)
-            cur = by_id[cur]["parent_id"]
+            cur = by_id[cur].parent_id
         return False
 
-    roots: list[dict] = []
+    roots: list[FolderTreeNode] = []
     for node in by_id.values():
-        parent = node["parent_id"]
-        if parent is None or parent not in by_id or in_cycle(node["id"]):
+        parent = node.parent_id
+        if parent is None or parent not in by_id or in_cycle(node.id):
             roots.append(node)
         else:
-            by_id[parent]["children"].append(node)
+            by_id[parent].children.append(node)
 
     orphan_feeds: list[sqlite3.Row] = []
     for feed in feeds:
         fid = feed["folder_id"]
         if fid is not None and fid in by_id:
-            by_id[fid]["feeds"].append(feed)
+            by_id[fid].feeds.append(feed)
         else:
             orphan_feeds.append(feed)
 
-    def aggregate(node: dict) -> int:
-        total: int = sum(int(f["unread_count"]) for f in node["feeds"])
-        for child in node["children"]:
+    def aggregate(node: FolderTreeNode) -> int:
+        total: int = sum(int(f["unread_count"]) for f in node.feeds)
+        for child in node.children:
             total += aggregate(child)
-        node["unread_count"] = total
+        node.unread_count = total
         return total
 
     for root in roots:
@@ -105,7 +114,7 @@ def list_feeds_filtered(
     include_orphan: bool = True,
 ) -> list[sqlite3.Row]:
     where: list[str] = []
-    params: list[Any] = []
+    params: list[SqlParam] = []
 
     # folder_ids is None means "no folder filter applied at all" (show every feed).
     # Only when folder_ids is given do we narrow by folder / orphan.
@@ -223,7 +232,7 @@ def list_entries(
     offset: int = 0,
 ) -> list[sqlite3.Row]:
     where: list[str] = []
-    params: list[Any] = []
+    params: list[SqlParam] = []
 
     if scope == "starred":
         where.append("e.is_starred = 1")

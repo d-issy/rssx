@@ -5,13 +5,13 @@ from factories import seed_feed
 
 from rssx.db import connect, init_schema
 from rssx.domain.events import DomainEvent
-from rssx.fetcher import FetchConfig
+from rssx.lib.feeds.scheduling import FetchConfig
 from rssx.usecases.manage import ManageUseCases
 from rssx.usecases.results import ApplicationError
 
 
 def fetch_cfg() -> FetchConfig:
-    return FetchConfig(min_interval_sec=60, max_interval_sec=120, initial_interval_sec=60)
+    return FetchConfig(min_interval_min=1, max_interval_min=2, initial_interval_min=1)
 
 
 def test_create_feed_with_new_folder_is_unit_testable_without_http(db_path: Path) -> None:

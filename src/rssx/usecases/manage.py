@@ -1,14 +1,11 @@
-import logging
 import sqlite3
 from collections.abc import Callable
 
-from rssx import repository as repo
-from rssx.domain.entities import DomainError, FeedDraft, FeedUrl, FolderName, FolderSelection
-from rssx.domain.events import DomainEvent
-from rssx.fetcher import FetchConfig, fetch_feed, probe_feed_title
-from rssx.usecases.results import ApplicationError, FeedCreateResult, OperationResult
-
-log = logging.getLogger(__name__)
+from rssx.lib.feeds.scheduling import FetchConfig
+from rssx.usecases.feed_sync import fetch_feed, probe_feed_title
+from rssx.usecases.manage_feeds import FeedManagementUseCases
+from rssx.usecases.manage_folders import FolderManagementUseCases
+from rssx.usecases.results import FeedCreateResult, OperationResult
 
 
 class ManageUseCases:
@@ -20,27 +17,22 @@ class ManageUseCases:
         probe_feed_title_fn: Callable[[str], tuple[str, str | None]] = probe_feed_title,
         fetch_feed_fn: Callable[[sqlite3.Connection, int, FetchConfig], object] = fetch_feed,
     ) -> None:
-        self.conn = conn
-        self.fetch_cfg = fetch_cfg
-        self.probe_feed_title = probe_feed_title_fn
-        self.fetch_feed = fetch_feed_fn
+        self.folders = FolderManagementUseCases(conn)
+        self.feeds = FeedManagementUseCases(
+            conn,
+            fetch_cfg,
+            probe_feed_title_fn=probe_feed_title_fn,
+            fetch_feed_fn=fetch_feed_fn,
+        )
 
     def create_folder(self, name: str) -> OperationResult:
-        folder_name = self._to_application_error(lambda: FolderName.from_raw(name))
-        repo.add_folder(self.conn, folder_name.value, None)
-        return OperationResult((DomainEvent.COUNTS_CHANGED,))
+        return self.folders.create_folder(name)
 
     def rename_folder(self, folder_id: int, name: str) -> OperationResult:
-        folder_name = self._to_application_error(lambda: FolderName.from_raw(name))
-        repo.rename_folder(self.conn, folder_id, folder_name.value)
-        return OperationResult((DomainEvent.COUNTS_CHANGED,))
+        return self.folders.rename_folder(folder_id, name)
 
     def delete_folder(self, folder_id: int, mode: str) -> OperationResult:
-        if mode == "cascade":
-            repo.delete_folder_cascade(self.conn, folder_id)
-        else:
-            repo.delete_folder(self.conn, folder_id)
-        return OperationResult((DomainEvent.COUNTS_CHANGED, DomainEvent.FOLDER_CHANGED))
+        return self.folders.delete_folder(folder_id, mode)
 
     def create_feed(
         self,
@@ -50,55 +42,15 @@ class ManageUseCases:
         folder_id: str | None = None,
         new_folder_name: str | None = None,
     ) -> FeedCreateResult:
-        draft = self._build_feed_draft(
+        return self.feeds.create_feed(
             url=url,
             title=title,
             folder_id=folder_id,
             new_folder_name=new_folder_name,
         )
 
-        existing = self.conn.execute(
-            "SELECT id, title FROM feeds WHERE url = ?", (draft.url.value,)
-        ).fetchone()
-        if existing:
-            raise ApplicationError(f"このURLは既に登録されています: {existing['title']}")
-
-        try:
-            feed_id = repo.add_feed(
-                self.conn,
-                url=draft.url.value,
-                title=draft.normalized_title,
-                site_url=draft.site_url,
-                folder_id=draft.folder_selection.folder_id,
-            )
-        except sqlite3.IntegrityError as e:
-            raise ApplicationError("このURLは既に登録されています") from e
-
-        if draft.folder_selection.new_folder_name is not None:
-            target_folder_id = repo.add_folder(
-                self.conn,
-                draft.folder_selection.new_folder_name.value,
-                None,
-            )
-            repo.update_feed_folder(self.conn, feed_id, target_folder_id)
-
-        try:
-            self.fetch_feed(self.conn, feed_id, self.fetch_cfg)
-        except Exception:
-            log.exception("initial fetch failed for new feed %s", draft.url.value)
-
-        return FeedCreateResult(
-            events=(
-                DomainEvent.FEED_ADDED,
-                DomainEvent.COUNTS_CHANGED,
-                DomainEvent.FEED_FOLDER_CHANGED,
-            ),
-            feed_id=feed_id,
-        )
-
     def delete_feed(self, feed_id: int) -> OperationResult:
-        repo.delete_feed(self.conn, feed_id)
-        return OperationResult((DomainEvent.COUNTS_CHANGED, DomainEvent.FEED_FOLDER_CHANGED))
+        return self.feeds.delete_feed(feed_id)
 
     def edit_feed(
         self,
@@ -107,48 +59,7 @@ class ManageUseCases:
         title: str | None = None,
         folder_id: str = "__unchanged",
     ) -> OperationResult:
-        events = [DomainEvent.COUNTS_CHANGED]
-        if title is not None:
-            repo.update_feed_title(self.conn, feed_id, title)
-        if folder_id != "__unchanged":
-            new_folder = None if folder_id == "__none" else int(folder_id)
-            repo.update_feed_folder(self.conn, feed_id, new_folder)
-            events.append(DomainEvent.FEED_FOLDER_CHANGED)
-        return OperationResult(tuple(events))
-
-    def _build_feed_draft(
-        self,
-        *,
-        url: str,
-        title: str,
-        folder_id: str | None,
-        new_folder_name: str | None,
-    ) -> FeedDraft:
-        feed_url = self._to_application_error(lambda: FeedUrl.from_raw(url))
-        selection = self._to_application_error(
-            lambda: FolderSelection.from_form(folder_id, new_folder_name)
-        )
-
-        site_url: str | None = None
-        resolved_title = title
-        if not resolved_title.strip():
-            try:
-                resolved_title, site_url = self.probe_feed_title(feed_url.value)
-            except Exception as e:
-                raise ApplicationError(f"フィードを読み込めませんでした: {e}") from e
-
-        return FeedDraft(
-            url=feed_url,
-            title=resolved_title,
-            site_url=site_url,
-            folder_selection=selection,
-        )
-
-    def _to_application_error[T](self, fn: Callable[[], T]) -> T:
-        try:
-            return fn()
-        except DomainError as e:
-            raise ApplicationError(e.message) from e
+        return self.feeds.edit_feed(feed_id, title=title, folder_id=folder_id)
 
 
 # Temporary compatibility alias while call sites/tests migrate terminology.

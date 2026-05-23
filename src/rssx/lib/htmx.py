@@ -1,5 +1,4 @@
 import json
-from typing import Any
 
 from fastapi import Request
 from starlette.responses import Response
@@ -20,11 +19,11 @@ def add_trigger(resp: Response, *events: DomainEvent | str) -> Response:
     Always writes the JSON-object form. It is unambiguous for event names that
     contain colons and composes safely when multiple code paths add events.
     """
-    merged: dict[str, Any] = {}
+    merged: dict[str, None] = {}
     existing = resp.headers.get("HX-Trigger")
     if existing:
         try:
-            parsed = json.loads(existing)
+            parsed: object = json.loads(existing)
         except json.JSONDecodeError:
             for name in existing.split(","):
                 name = name.strip()
@@ -32,7 +31,9 @@ def add_trigger(resp: Response, *events: DomainEvent | str) -> Response:
                     merged[name] = None
         else:
             if isinstance(parsed, dict):
-                merged.update(parsed)
+                for key in parsed:
+                    if isinstance(key, str):
+                        merged[key] = None
             elif isinstance(parsed, str):
                 merged[parsed] = None
     for event in events:
@@ -46,11 +47,11 @@ def trigger_names(value: str | None) -> set[str]:
     if not value:
         return set()
     try:
-        parsed = json.loads(value)
+        parsed: object = json.loads(value)
     except json.JSONDecodeError:
         return {part.strip() for part in value.split(",") if part.strip()}
     if isinstance(parsed, dict):
-        return set(parsed)
+        return {key for key in parsed if isinstance(key, str)}
     if isinstance(parsed, str):
         return {parsed}
     return set()

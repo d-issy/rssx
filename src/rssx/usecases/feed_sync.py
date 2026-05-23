@@ -1,29 +1,14 @@
-import calendar
-import hashlib
 import logging
 import sqlite3
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-import feedparser
-import httpx
-
-from .db import transaction
+from rssx.db import transaction
+from rssx.lib.feeds.client import fetch_url
+from rssx.lib.feeds.parser import parse_feed
+from rssx.lib.feeds.scheduling import FetchConfig, compute_next_interval
 
 log = logging.getLogger(__name__)
-
-USER_AGENT = "rssx/0.1 (+https://github.com/d-issy/rssx)"
-
-
-@dataclass
-class FetchConfig:
-    min_interval_sec: int = 10 * 60
-    max_interval_sec: int = 24 * 60 * 60
-    initial_interval_sec: int = 30 * 60
-    history_window: int = 15
-    interval_factor: float = 0.5
-    empty_backoff_factor: float = 1.5
 
 
 def now_utc() -> datetime:
@@ -38,90 +23,11 @@ def to_iso(dt: datetime | None) -> str | None:
     return dt.astimezone(UTC).isoformat(timespec="seconds")
 
 
-def parse_struct_time(st) -> datetime | None:
-    if not st:
-        return None
-    try:
-        return datetime.fromtimestamp(calendar.timegm(st), tz=UTC)
-    except TypeError, ValueError, OverflowError:
-        return None
-
-
-def make_guid(entry) -> str:
-    for key in ("id", "guid", "link"):
-        value = entry.get(key)
-        if value:
-            return str(value)
-    raw = (entry.get("title", "") + entry.get("summary", "")).encode("utf-8")
-    return "sha256:" + hashlib.sha256(raw).hexdigest()
-
-
-def extract_entry_fields(entry) -> dict:
-    content_blocks = entry.get("content") or []
-    content_html = ""
-    if content_blocks:
-        content_html = content_blocks[0].get("value", "") or ""
-    summary = entry.get("summary", "") or ""
-    if not content_html:
-        content_html = summary
-
-    return {
-        "guid": make_guid(entry),
-        "title": (entry.get("title") or "").strip(),
-        "url": entry.get("link") or None,
-        "author": entry.get("author") or None,
-        "content": content_html,
-        "summary": summary,
-        "published_at": to_iso(
-            parse_struct_time(entry.get("published_parsed"))
-            or parse_struct_time(entry.get("updated_parsed"))
-        ),
-    }
-
-
-def fetch_url(
-    url: str, etag: str | None = None, last_modified: str | None = None
-) -> httpx.Response:
-    headers = {"User-Agent": USER_AGENT}
-    if etag:
-        headers["If-None-Match"] = etag
-    if last_modified:
-        headers["If-Modified-Since"] = last_modified
-    with httpx.Client(timeout=30, follow_redirects=True, headers=headers) as client:
-        return client.get(url)
-
-
 def probe_feed_title(url: str) -> tuple[str, str | None]:
     resp = fetch_url(url)
     resp.raise_for_status()
-    parsed = feedparser.parse(resp.text)
-    title = (parsed.feed.get("title") or url).strip()
-    site_url = parsed.feed.get("link") or None
-    return title, site_url
-
-
-def compute_next_interval(
-    published_times: list[datetime],
-    consecutive_empty: int,
-    cfg: FetchConfig,
-) -> int:
-    times = sorted([t for t in published_times if t is not None], reverse=True)
-    if len(times) < 2:
-        base = cfg.initial_interval_sec
-    else:
-        sample = times[: cfg.history_window]
-        deltas = [(sample[i] - sample[i + 1]).total_seconds() for i in range(len(sample) - 1)]
-        deltas = [d for d in deltas if d > 0]
-        if not deltas:
-            base = cfg.initial_interval_sec
-        else:
-            avg = sum(deltas) / len(deltas)
-            base = int(avg * cfg.interval_factor)
-
-    if consecutive_empty > 0:
-        base = int(base * (cfg.empty_backoff_factor**consecutive_empty))
-
-    return max(cfg.min_interval_sec, min(cfg.max_interval_sec, base))
+    parsed = parse_feed(resp.text, fallback_title=url)
+    return parsed.title, parsed.site_url
 
 
 def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None = None) -> int:
@@ -143,7 +49,7 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
                 (
                     str(e),
                     to_iso(now_utc()),
-                    to_iso(now_utc() + timedelta(seconds=cfg.min_interval_sec)),
+                    to_iso(now_utc() + timedelta(minutes=cfg.min_interval_min)),
                     feed_id,
                 ),
             )
@@ -153,10 +59,9 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
     if resp.status_code == 304:
         log.info("not modified: %s", row["url"])
     else:
-        parsed = feedparser.parse(resp.text)
+        parsed = parse_feed(resp.text, fallback_title=row["url"])
         with transaction(conn):
             for entry in parsed.entries:
-                fields = extract_entry_fields(entry)
                 try:
                     cur = conn.execute(
                         """
@@ -166,13 +71,13 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
                         """,
                         (
                             feed_id,
-                            fields["guid"],
-                            fields["title"],
-                            fields["url"],
-                            fields["author"],
-                            fields["content"],
-                            fields["summary"],
-                            fields["published_at"],
+                            entry.guid,
+                            entry.title,
+                            entry.url,
+                            entry.author,
+                            entry.content,
+                            entry.summary,
+                            entry.published_at,
                         ),
                     )
                     if cur.rowcount > 0:
