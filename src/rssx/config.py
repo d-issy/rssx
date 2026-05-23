@@ -17,10 +17,10 @@ class Config:
     db_path: Path = field(default_factory=lambda: xdg_data_home() / "rssx" / "rssx.db")
     host: str = "localhost"
     port: int = 8080
-    min_interval_sec: int = 10 * 60
-    max_interval_sec: int = 24 * 60 * 60
-    initial_interval_sec: int = 30 * 60
-    scheduler_tick_sec: int = 60
+    min_interval_min: int = 10
+    max_interval_min: int = 24 * 60
+    initial_interval_min: int = 30
+    scheduler_tick_min: int = 1
     timezone: str = "local"
 
     @classmethod
@@ -39,12 +39,12 @@ class Config:
             if "timezone" in data:
                 cfg.timezone = str(data["timezone"])
             fetch = data.get("fetch", {})
-            if "min_interval_sec" in fetch:
-                cfg.min_interval_sec = int(fetch["min_interval_sec"])
-            if "max_interval_sec" in fetch:
-                cfg.max_interval_sec = int(fetch["max_interval_sec"])
-            if "initial_interval_sec" in fetch:
-                cfg.initial_interval_sec = int(fetch["initial_interval_sec"])
-            if "scheduler_tick_sec" in fetch:
-                cfg.scheduler_tick_sec = int(fetch["scheduler_tick_sec"])
+            if "min_interval_min" in fetch:
+                cfg.min_interval_min = int(fetch["min_interval_min"])
+            if "max_interval_min" in fetch:
+                cfg.max_interval_min = int(fetch["max_interval_min"])
+            if "initial_interval_min" in fetch:
+                cfg.initial_interval_min = int(fetch["initial_interval_min"])
+            if "scheduler_tick_min" in fetch:
+                cfg.scheduler_tick_min = int(fetch["scheduler_tick_min"])
         return cfg
