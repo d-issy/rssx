@@ -157,7 +157,10 @@
     const entryEl = row.parentElement;
     const list = entries();
     selectedIndex = list.indexOf(entryEl);
-    list.forEach((el, i) => el.classList.toggle("selected", i === selectedIndex));
+    list.forEach((el, i) => {
+      el.classList.toggle("selected", i === selectedIndex);
+      if (i !== selectedIndex) collapse(el);
+    });
     toggleExpand(entryEl);
   });
 
