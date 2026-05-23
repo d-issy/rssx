@@ -183,6 +183,21 @@
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  function isHiddenByClosedDetails(el) {
+    // Walk up: if we ever enter a <details> through a non-<summary> child
+    // while that <details> is closed, the element is not visible.
+    let node = el;
+    while (node) {
+      const parent = node.parentElement;
+      if (!parent) return false;
+      if (parent.tagName === "DETAILS" && !parent.open && node.tagName !== "SUMMARY") {
+        return true;
+      }
+      node = parent;
+    }
+    return false;
+  }
+
   function navItems() {
     const sb = document.querySelector(".sidebar");
     if (!sb) return [];
@@ -196,9 +211,7 @@
       }
       const scope = url.searchParams.get("scope");
       if (!scope) return;
-      // Hidden by a collapsed ancestor <details>: offsetParent is null because
-      // the UA stylesheet hides non-summary children of closed <details>.
-      if (a.offsetParent === null) return;
+      if (isHiddenByClosedDetails(a)) return;
       items.push({
         el: a,
         scope: scope,
