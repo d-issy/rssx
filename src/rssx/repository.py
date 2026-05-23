@@ -26,7 +26,8 @@ def build_folder_tree(folders: list[sqlite3.Row]) -> list[dict]:
 
 
 def build_sidebar_tree(
-    folders: list[sqlite3.Row], feeds: list[sqlite3.Row]
+    folders: list[sqlite3.Row],
+    feeds: list[sqlite3.Row],
 ) -> tuple[list[dict], list[sqlite3.Row], int]:
     by_id: dict[int, dict] = {
         f["id"]: {

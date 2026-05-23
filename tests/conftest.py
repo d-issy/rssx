@@ -16,7 +16,7 @@ def db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(db_path: Path) -> Iterator[TestClient]:
-    app = create_app(Config(db_path=db_path))
+    app = create_app(Config(db_path=db_path), run_startup_fetch=False)
     with TestClient(app) as c:
         yield c
 

@@ -58,7 +58,8 @@ function switchTab(name: string): void {
 
 function flashSaved(target: Element | null | undefined): void {
   if (!target) return;
-  const host = target instanceof HTMLElement ? target : (target.parentElement as HTMLElement | null);
+  const host =
+    target instanceof HTMLElement ? target : (target.parentElement as HTMLElement | null);
   if (!host) return;
   const mark = document.createElement("span");
   mark.className = "manage-saved-flash";
@@ -443,8 +444,7 @@ function updateFolderFilterLabel(root: HTMLElement): void {
   if (checked.length === total) label.textContent = "フォルダ: すべて";
   else if (checked.length === 0) label.textContent = "フォルダ: なし";
   else if (checked.length === 1) {
-    const name =
-      checked[0].parentElement?.querySelector("span")?.textContent?.trim() ?? "(1件)";
+    const name = checked[0].parentElement?.querySelector("span")?.textContent?.trim() ?? "(1件)";
     label.textContent = `フォルダ: ${name}`;
   } else label.textContent = `フォルダ: ${checked.length}件`;
 }
@@ -484,11 +484,9 @@ function bindFolderFilter(root: HTMLElement): void {
   const selectAllBtn = root.querySelector<HTMLButtonElement>("[data-folder-select-all]");
   const selectNoneBtn = root.querySelector<HTMLButtonElement>("[data-folder-select-none]");
   const setAll = (checked: boolean) => {
-    root
-      .querySelectorAll<HTMLInputElement>("input[name='folders']")
-      .forEach((box) => {
-        box.checked = checked;
-      });
+    root.querySelectorAll<HTMLInputElement>("input[name='folders']").forEach((box) => {
+      box.checked = checked;
+    });
     updateFolderFilterLabel(root);
     fireFilterRequest(root);
   };
@@ -511,11 +509,9 @@ function bindFolderFilter(root: HTMLElement): void {
     const myBox = row.querySelector<HTMLInputElement>("input[name='folders']");
     if (!myBox) return;
     ev.preventDefault();
-    root
-      .querySelectorAll<HTMLInputElement>("input[name='folders']")
-      .forEach((box) => {
-        box.checked = box === myBox;
-      });
+    root.querySelectorAll<HTMLInputElement>("input[name='folders']").forEach((box) => {
+      box.checked = box === myBox;
+    });
     updateFolderFilterLabel(root);
     fireFilterRequest(root);
   });
