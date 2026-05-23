@@ -4,9 +4,9 @@ import hashlib
 import logging
 import sqlite3
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from datetime import UTC, datetime, timedelta
 
 import feedparser
 import httpx
@@ -29,22 +29,22 @@ class FetchConfig:
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def to_iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat(timespec="seconds")
 
 
 def parse_struct_time(st) -> datetime | None:
     if not st:
         return None
     try:
-        return datetime.fromtimestamp(time.mktime(st), tz=timezone.utc)
+        return datetime.fromtimestamp(time.mktime(st), tz=UTC)
     except (TypeError, ValueError, OverflowError):
         return None
 
@@ -81,7 +81,9 @@ def extract_entry_fields(entry) -> dict:
     }
 
 
-def fetch_url(url: str, etag: str | None = None, last_modified: str | None = None) -> httpx.Response:
+def fetch_url(
+    url: str, etag: str | None = None, last_modified: str | None = None
+) -> httpx.Response:
     headers = {"User-Agent": USER_AGENT}
     if etag:
         headers["If-None-Match"] = etag
@@ -110,10 +112,7 @@ def compute_next_interval(
         base = cfg.initial_interval_sec
     else:
         sample = times[: cfg.history_window]
-        deltas = [
-            (sample[i] - sample[i + 1]).total_seconds()
-            for i in range(len(sample) - 1)
-        ]
+        deltas = [(sample[i] - sample[i + 1]).total_seconds() for i in range(len(sample) - 1)]
         deltas = [d for d in deltas if d > 0]
         if not deltas:
             base = cfg.initial_interval_sec
@@ -122,7 +121,7 @@ def compute_next_interval(
             base = int(avg * cfg.interval_factor)
 
     if consecutive_empty > 0:
-        base = int(base * (cfg.empty_backoff_factor ** consecutive_empty))
+        base = int(base * (cfg.empty_backoff_factor**consecutive_empty))
 
     return max(cfg.min_interval_sec, min(cfg.max_interval_sec, base))
 
@@ -203,8 +202,18 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
         except (TypeError, ValueError):
             continue
 
-    consecutive_empty = 0 if new_count > 0 else (
-        (conn.execute("SELECT consecutive_empty FROM feeds WHERE id = ?", (feed_id,)).fetchone()["consecutive_empty"] or 0) + 1
+    consecutive_empty = (
+        0
+        if new_count > 0
+        else (
+            (
+                conn.execute(
+                    "SELECT consecutive_empty FROM feeds WHERE id = ?", (feed_id,)
+                ).fetchone()["consecutive_empty"]
+                or 0
+            )
+            + 1
+        )
     )
     next_interval = compute_next_interval(pub_times, consecutive_empty, cfg)
     next_at = now_utc() + timedelta(seconds=next_interval)
@@ -219,7 +228,10 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
 
     log.info(
         "feed %s: +%d entries, next in %ds (empty streak %d)",
-        row["url"], new_count, next_interval, consecutive_empty,
+        row["url"],
+        new_count,
+        next_interval,
+        consecutive_empty,
     )
     return new_count
 
@@ -243,7 +255,9 @@ def fetch_all(conn: sqlite3.Connection, cfg: FetchConfig | None = None) -> int:
     return total
 
 
-def fetch_feed_ids(conn: sqlite3.Connection, feed_ids: Iterable[int], cfg: FetchConfig | None = None) -> int:
+def fetch_feed_ids(
+    conn: sqlite3.Connection, feed_ids: Iterable[int], cfg: FetchConfig | None = None
+) -> int:
     total = 0
     for fid in feed_ids:
         total += fetch_feed(conn, fid, cfg)

@@ -18,6 +18,7 @@
             python312
             uv
             sqlite
+            just
           ];
 
           shellHook = ''

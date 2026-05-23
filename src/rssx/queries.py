@@ -48,9 +48,7 @@ def descendant_folder_ids(conn: sqlite3.Connection, folder_id: int) -> list[int]
     stack = [folder_id]
     while stack:
         current = stack.pop()
-        rows = conn.execute(
-            "SELECT id FROM folders WHERE parent_id = ?", (current,)
-        ).fetchall()
+        rows = conn.execute("SELECT id FROM folders WHERE parent_id = ?", (current,)).fetchall()
         for r in rows:
             ids.append(r["id"])
             stack.append(r["id"])
@@ -110,7 +108,7 @@ def list_entries(
 
 
 def get_entry(conn: sqlite3.Connection, entry_id: int) -> sqlite3.Row | None:
-    return conn.execute(
+    row: sqlite3.Row | None = conn.execute(
         """
         SELECT e.*, f.title AS feed_title
         FROM entries e JOIN feeds f ON f.id = e.feed_id
@@ -118,6 +116,7 @@ def get_entry(conn: sqlite3.Connection, entry_id: int) -> sqlite3.Row | None:
         """,
         (entry_id,),
     ).fetchone()
+    return row
 
 
 def mark_read(conn: sqlite3.Connection, entry_id: int, value: bool) -> None:
@@ -153,6 +152,7 @@ def add_folder(conn: sqlite3.Connection, name: str, parent_id: int | None = None
             "INSERT INTO folders (name, parent_id) VALUES (?, ?)",
             (name.strip(), parent_id),
         )
+    assert cur.lastrowid is not None
     return cur.lastrowid
 
 
@@ -177,6 +177,7 @@ def add_feed(
             """,
             (url.strip(), title.strip(), site_url, folder_id),
         )
+    assert cur.lastrowid is not None
     return cur.lastrowid
 
 
@@ -185,26 +186,14 @@ def delete_feed(conn: sqlite3.Connection, feed_id: int) -> None:
         conn.execute("DELETE FROM feeds WHERE id = ?", (feed_id,))
 
 
-def update_feed(
-    conn: sqlite3.Connection,
-    feed_id: int,
-    *,
-    title: str | None = None,
-    folder_id: int | None = ...,  # sentinel: ... = don't change
-) -> None:
-    sets: list[str] = []
-    params: list[Any] = []
-    if title is not None:
-        sets.append("title = ?")
-        params.append(title.strip())
-    if folder_id is not ...:
-        sets.append("folder_id = ?")
-        params.append(folder_id)
-    if not sets:
-        return
-    params.append(feed_id)
+def update_feed_title(conn: sqlite3.Connection, feed_id: int, title: str) -> None:
     with transaction(conn):
-        conn.execute(f"UPDATE feeds SET {', '.join(sets)} WHERE id = ?", params)
+        conn.execute("UPDATE feeds SET title = ? WHERE id = ?", (title.strip(), feed_id))
+
+
+def update_feed_folder(conn: sqlite3.Connection, feed_id: int, folder_id: int | None) -> None:
+    with transaction(conn):
+        conn.execute("UPDATE feeds SET folder_id = ? WHERE id = ?", (folder_id, feed_id))
 
 
 def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> list[sqlite3.Row]:

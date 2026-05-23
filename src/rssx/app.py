@@ -7,7 +7,7 @@ from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -112,9 +112,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         entry = q.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
-        return TEMPLATES.TemplateResponse(
-            request, "_entry_body.html", {"entry": entry}
-        )
+        return TEMPLATES.TemplateResponse(request, "_entry_body.html", {"entry": entry})
 
     @app.post("/entries/{entry_id}/read", response_class=HTMLResponse)
     def entry_read(request: Request, entry_id: int, value: int = 1):
@@ -122,9 +120,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         entry = q.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
-        resp = TEMPLATES.TemplateResponse(
-            request, "_entry_row.html", {"entry": entry}
-        )
+        resp = TEMPLATES.TemplateResponse(request, "_entry_row.html", {"entry": entry})
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
 
@@ -134,9 +130,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         entry = q.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
-        resp = TEMPLATES.TemplateResponse(
-            request, "_entry_row.html", {"entry": entry}
-        )
+        resp = TEMPLATES.TemplateResponse(request, "_entry_row.html", {"entry": entry})
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
 
@@ -222,10 +216,8 @@ def create_app(config: Config | None = None) -> FastAPI:
             try:
                 title, site_url = probe_feed_title(url)
             except Exception as e:
-                raise HTTPException(400, f"could not load feed: {e}")
-        feed_id = q.add_feed(
-            conn, url=url, title=title, site_url=site_url, folder_id=folder_id
-        )
+                raise HTTPException(400, f"could not load feed: {e}") from e
+        feed_id = q.add_feed(conn, url=url, title=title, site_url=site_url, folder_id=folder_id)
         try:
             fetch_feed(conn, feed_id, fetch_cfg)
         except Exception:
@@ -243,11 +235,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         title: Annotated[str | None, Form()] = None,
         folder_id: Annotated[str | None, Form()] = None,
     ):
-        if folder_id is None:
-            q.update_feed(conn, feed_id, title=title)
-        else:
+        if title is not None:
+            q.update_feed_title(conn, feed_id, title)
+        if folder_id is not None:
             new_folder = int(folder_id) if folder_id != "" else None
-            q.update_feed(conn, feed_id, title=title, folder_id=new_folder)
+            q.update_feed_folder(conn, feed_id, new_folder)
         return RedirectResponse("/manage", status_code=303)
 
     return app

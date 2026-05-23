@@ -25,7 +25,7 @@ class Config:
     scheduler_tick_sec: int = 60
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "Config":
+    def load(cls, path: Path | None = None) -> Config:
         cfg = cls()
         config_file = path or (xdg_config_home() / "rssx" / "config.toml")
         if config_file.exists():
