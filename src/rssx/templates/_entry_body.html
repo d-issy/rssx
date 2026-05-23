@@ -4,7 +4,7 @@
     <div class="entry-meta">
       <span>{{ entry.feed_title }}</span>
       {% if entry.author %}<span>· {{ entry.author }}</span>{% endif %}
-      {% if entry.published_at %}<time>· {{ entry.published_at[:16] }}</time>{% endif %}
+      {% if entry.published_at %}<time datetime="{{ entry.published_at|iso_utc }}">· {{ entry.published_at|fmt_dt }}</time>{% endif %}
     </div>
   </header>
   <div class="entry-content">

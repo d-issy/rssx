@@ -23,6 +23,7 @@ class Config:
     max_interval_sec: int = 24 * 60 * 60
     initial_interval_sec: int = 30 * 60
     scheduler_tick_sec: int = 60
+    timezone: str = "local"
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:
@@ -37,6 +38,8 @@ class Config:
                 cfg.host = str(data["host"])
             if "port" in data:
                 cfg.port = int(data["port"])
+            if "timezone" in data:
+                cfg.timezone = str(data["timezone"])
             fetch = data.get("fetch", {})
             if "min_interval_sec" in fetch:
                 cfg.min_interval_sec = int(fetch["min_interval_sec"])

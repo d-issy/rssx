@@ -10,7 +10,7 @@
             title="スター (f)">{% if entry.is_starred %}★{% else %}☆{% endif %}</button>
     <span class="entry-feed">{{ entry.feed_title }}</span>
     <span class="entry-title">{{ entry.title or '(無題)' }}</span>
-    <time class="entry-date">{{ (entry.published_at or entry.fetched_at)[:16] }}</time>
+    <time class="entry-date" datetime="{{ (entry.published_at or entry.fetched_at)|iso_utc }}">{{ (entry.published_at or entry.fetched_at)|fmt_dt }}</time>
   </div>
   <div class="entry-body" id="body-{{ entry.id }}" hidden></div>
 </li>

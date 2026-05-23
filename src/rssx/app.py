@@ -4,8 +4,10 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -32,8 +34,49 @@ DEV_MODE = bool(os.environ.get("RSSX_DEV"))
 TEMPLATES.env.globals["dev_mode"] = DEV_MODE
 
 
+def _resolve_tz(name: str):
+    if name == "local":
+        return datetime.now().astimezone().tzinfo
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        log.warning("unknown timezone %r, falling back to system local", name)
+        return datetime.now().astimezone().tzinfo
+
+
+def _parse_stored(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace(" ", "T"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt.astimezone(ZoneInfo("UTC"))
+
+
+def _make_filters(tz):
+    def iso_utc(value: str | None) -> str:
+        dt = _parse_stored(value)
+        if dt is None:
+            return ""
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def fmt_dt(value: str | None) -> str:
+        dt = _parse_stored(value)
+        if dt is None:
+            return ""
+        return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+    return iso_utc, fmt_dt
+
+
 def create_app(config: Config | None = None) -> FastAPI:
     config = config or Config.load()
+    iso_utc, fmt_dt = _make_filters(_resolve_tz(config.timezone))
+    TEMPLATES.env.filters["iso_utc"] = iso_utc
+    TEMPLATES.env.filters["fmt_dt"] = fmt_dt
     conn = connect(config.db_path)
     init_schema(conn)
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import calendar
 import hashlib
 import logging
 import sqlite3
-import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -44,8 +44,8 @@ def parse_struct_time(st) -> datetime | None:
     if not st:
         return None
     try:
-        return datetime.fromtimestamp(time.mktime(st), tz=UTC)
-    except (TypeError, ValueError, OverflowError):
+        return datetime.fromtimestamp(calendar.timegm(st), tz=UTC)
+    except TypeError, ValueError, OverflowError:
         return None
 
 
@@ -199,7 +199,7 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
     for r in rows:
         try:
             pub_times.append(datetime.fromisoformat(r["published_at"]))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
 
     consecutive_empty = (
