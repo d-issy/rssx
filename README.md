@@ -6,10 +6,24 @@ Self-hosted minimal RSS reader. Organize feeds in nested folders, navigate artic
 
 ```sh
 nix develop
-uv run rssx
+just run
 ```
 
 Defaults to `http://localhost:8080`.
+
+## Development
+
+Common tasks are exposed via [`just`](https://github.com/casey/just):
+
+| Recipe | Description |
+| --- | --- |
+| `just` | List available recipes |
+| `just run` | Start the server |
+| `just dev` | Start the dev server with hot reload |
+| `just lint` | Run ruff check + format check + mypy |
+| `just fmt` | Format code |
+| `just fix` | Auto-fix lint issues and format |
+| `just db [path]` | Open the SQLite database in `sqlite3` |
 
 ## Configuration
 
@@ -21,10 +35,10 @@ host = "localhost"
 port = 8080
 
 [fetch]
-min_interval_sec = 600
-max_interval_sec = 86400
-initial_interval_sec = 1800
-scheduler_tick_sec = 60
+min_interval_min = 10
+max_interval_min = 1440
+initial_interval_min = 30
+scheduler_tick_min = 1
 ```
 
 ## Keybindings
@@ -42,7 +56,3 @@ scheduler_tick_sec = 60
 | `Esc` | Blur the search box |
 
 An entry is marked read automatically after staying expanded for 2 seconds.
-
-## Fetching
-
-On startup all feeds are fetched once. After that, each feed's next fetch time is derived from the average interval of its recent entries, clamped to `[min_interval_sec, max_interval_sec]`. Empty fetches back off exponentially. Manual refresh buttons are available in the top bar and per-feed on `/manage`.
