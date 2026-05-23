@@ -12,7 +12,7 @@ dev:
     trap 'kill 0' EXIT INT TERM
     RSSX_DEV=1 uv run rssx &
     pnpm dev &
-    wait
+    wait -n
 
 # Lint everything (backend + frontend)
 lint: lint-backend lint-frontend
