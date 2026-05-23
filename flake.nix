@@ -15,14 +15,14 @@
       {
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            python312
+            python314
             uv
             sqlite
             just
           ];
 
           shellHook = ''
-            export UV_PYTHON=${pkgs.python312}/bin/python3.12
+            export UV_PYTHON=${pkgs.python314}/bin/python3.14
             : "${builtins.hashString "sha256" pyprojectContent}"
             uv sync --quiet
             echo "rssx dev shell ready. Run: uv run rssx"

@@ -2,7 +2,7 @@
 name = "rssx"
 version = "0.1.0"
 description = "Self-hosted minimal RSS reader"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
@@ -31,7 +31,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 src = ["src"]
 
 [tool.ruff.lint]
@@ -51,7 +51,7 @@ ignore = [
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 files = ["src"]
 strict_optional = true
 warn_unused_ignores = true
