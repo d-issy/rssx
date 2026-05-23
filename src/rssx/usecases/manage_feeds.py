@@ -57,7 +57,7 @@ class FeedManagementUseCases:
 
         existing = repo.get_feed_by_url(self.conn, data.url.value)
         if existing:
-            raise ApplicationError(f"このURLは既に登録されています: {existing['title']}")
+            raise ApplicationError(f"このURLは既に登録されています: {existing.title}")
 
         try:
             feed_id = repo.add_feed(

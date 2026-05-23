@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -14,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from . import repository as repo
 from .config import Config
 from .db import connect, init_schema
+from .dto import EntryListItem
 from .lib.env import is_dev_mode
 from .lib.feeds.scheduling import FetchConfig
 from .lib.htmx import add_trigger, is_htmx
@@ -79,7 +79,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     def render_index(
         request: Request,
         scope_args: IndexScope,
-        entries: list[sqlite3.Row],
+        entries: list[EntryListItem],
     ) -> HTMLResponse:
         folders = repo.list_folders(conn)
         feeds = repo.list_feeds(conn)

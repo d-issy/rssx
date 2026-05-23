@@ -16,28 +16,36 @@ def resolve_tz(name: str) -> tzinfo | None:
         return datetime.now().astimezone().tzinfo
 
 
-def parse_stored_datetime(value: str | None) -> datetime | None:
-    if not value:
+def parse_stored_datetime(value: str | datetime | None) -> datetime | None:
+    if value is None:
         return None
-    try:
-        dt = datetime.fromisoformat(value.replace(" ", "T"))
-    except ValueError:
-        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        if not value:
+            return None
+        try:
+            dt = datetime.fromisoformat(value.replace(" ", "T"))
+        except ValueError:
+            return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=ZoneInfo("UTC"))
     return dt.astimezone(ZoneInfo("UTC"))
 
 
+DatetimeLike = str | datetime | None
+
+
 def make_datetime_filters(
     tz: tzinfo | None,
-) -> tuple[Callable[[str | None], str], Callable[[str | None], str]]:
-    def iso_utc(value: str | None) -> str:
+) -> tuple[Callable[[DatetimeLike], str], Callable[[DatetimeLike], str]]:
+    def iso_utc(value: DatetimeLike) -> str:
         dt = parse_stored_datetime(value)
         if dt is None:
             return ""
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def fmt_dt(value: str | None) -> str:
+    def fmt_dt(value: DatetimeLike) -> str:
         dt = parse_stored_datetime(value)
         if dt is None:
             return ""

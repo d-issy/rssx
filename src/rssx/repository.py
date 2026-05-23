@@ -1,46 +1,100 @@
 import sqlite3
-from dataclasses import dataclass, field
 
+from rssx.dto import (
+    EntryDetail,
+    EntryListItem,
+    FeedFetchState,
+    FeedListItem,
+    FeedRef,
+    FolderRow,
+    FolderTreeNode,
+    FolderWithCount,
+)
 from rssx.lib.feeds.models import ParsedEntry
+from rssx.lib.time import parse_stored_datetime
 
 from .db import transaction
 
 SqlParam = str | int | float | bytes | None
 
 
-@dataclass
-class FolderTreeNode:
-    id: int
-    name: str
-    parent_id: int | None
-    children: list[FolderTreeNode] = field(default_factory=list)
-    feeds: list[sqlite3.Row] = field(default_factory=list)
-    unread_count: int = 0
-
-    def __getitem__(self, key: str) -> object:
-        """Compatibility for older tests/call sites that used dict-style nodes."""
-        return getattr(self, key)
+def _folder_row(row: sqlite3.Row) -> FolderRow:
+    return FolderRow(
+        id=row["id"],
+        name=row["name"],
+        parent_id=row["parent_id"],
+        position=row["position"],
+    )
 
 
-@dataclass(frozen=True)
-class FeedFetchState:
-    id: int
-    url: str
-    etag: str | None
-    last_modified: str | None
+def _folder_with_count(row: sqlite3.Row) -> FolderWithCount:
+    return FolderWithCount(
+        id=row["id"],
+        name=row["name"],
+        parent_id=row["parent_id"],
+        position=row["position"],
+        feed_count=row["feed_count"],
+    )
 
 
-def list_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
+def _feed_list_item(row: sqlite3.Row) -> FeedListItem:
+    return FeedListItem(
+        id=row["id"],
+        url=row["url"],
+        title=row["title"],
+        site_url=row["site_url"],
+        folder_id=row["folder_id"],
+        last_fetched_at=parse_stored_datetime(row["last_fetched_at"]),
+        next_fetch_at=parse_stored_datetime(row["next_fetch_at"]),
+        last_error=row["last_error"],
+        unread_count=row["unread_count"],
+    )
+
+
+def _entry_list_item(row: sqlite3.Row) -> EntryListItem:
+    return EntryListItem(
+        id=row["id"],
+        feed_id=row["feed_id"],
+        title=row["title"],
+        url=row["url"],
+        author=row["author"],
+        summary=row["summary"],
+        published_at=parse_stored_datetime(row["published_at"]),
+        is_read=bool(row["is_read"]),
+        is_starred=bool(row["is_starred"]),
+        feed_title=row["feed_title"],
+    )
+
+
+def _entry_detail(row: sqlite3.Row) -> EntryDetail:
+    return EntryDetail(
+        id=row["id"],
+        feed_id=row["feed_id"],
+        guid=row["guid"],
+        title=row["title"],
+        url=row["url"],
+        author=row["author"],
+        content=row["content"],
+        summary=row["summary"],
+        published_at=parse_stored_datetime(row["published_at"]),
+        fetched_at=parse_stored_datetime(row["fetched_at"]),
+        is_read=bool(row["is_read"]),
+        is_starred=bool(row["is_starred"]),
+        read_at=parse_stored_datetime(row["read_at"]),
+        starred_at=parse_stored_datetime(row["starred_at"]),
+        feed_title=row["feed_title"],
+    )
+
+
+def list_folders(conn: sqlite3.Connection) -> list[FolderRow]:
+    rows = conn.execute(
         "SELECT id, name, parent_id, position FROM folders ORDER BY parent_id, position, name"
     ).fetchall()
+    return [_folder_row(r) for r in rows]
 
 
-def build_folder_tree(folders: list[sqlite3.Row]) -> list[FolderTreeNode]:
-    by_id = {
-        f["id"]: FolderTreeNode(id=f["id"], name=f["name"], parent_id=f["parent_id"])
-        for f in folders
-    }
+def build_folder_tree(folders: list[FolderRow]) -> list[FolderTreeNode]:
+    by_id = {f.id: FolderTreeNode(id=f.id, name=f.name, parent_id=f.parent_id) for f in folders}
     roots: list[FolderTreeNode] = []
     for node in by_id.values():
         parent = node.parent_id
@@ -52,13 +106,10 @@ def build_folder_tree(folders: list[sqlite3.Row]) -> list[FolderTreeNode]:
 
 
 def build_sidebar_tree(
-    folders: list[sqlite3.Row],
-    feeds: list[sqlite3.Row],
-) -> tuple[list[FolderTreeNode], list[sqlite3.Row], int]:
-    by_id = {
-        f["id"]: FolderTreeNode(id=f["id"], name=f["name"], parent_id=f["parent_id"])
-        for f in folders
-    }
+    folders: list[FolderRow],
+    feeds: list[FeedListItem],
+) -> tuple[list[FolderTreeNode], list[FeedListItem], int]:
+    by_id = {f.id: FolderTreeNode(id=f.id, name=f.name, parent_id=f.parent_id) for f in folders}
 
     def in_cycle(nid: int) -> bool:
         seen: set[int] = set()
@@ -78,16 +129,16 @@ def build_sidebar_tree(
         else:
             by_id[parent].children.append(node)
 
-    orphan_feeds: list[sqlite3.Row] = []
+    orphan_feeds: list[FeedListItem] = []
     for feed in feeds:
-        fid = feed["folder_id"]
+        fid = feed.folder_id
         if fid is not None and fid in by_id:
             by_id[fid].feeds.append(feed)
         else:
             orphan_feeds.append(feed)
 
     def aggregate(node: FolderTreeNode) -> int:
-        total: int = sum(int(f["unread_count"]) for f in node.feeds)
+        total = sum(f.unread_count for f in node.feeds)
         for child in node.children:
             total += aggregate(child)
         node.unread_count = total
@@ -96,12 +147,12 @@ def build_sidebar_tree(
     for root in roots:
         aggregate(root)
 
-    orphan_unread = sum(int(f["unread_count"]) for f in orphan_feeds)
+    orphan_unread = sum(f.unread_count for f in orphan_feeds)
     return roots, orphan_feeds, orphan_unread
 
 
-def list_feeds(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
+def list_feeds(conn: sqlite3.Connection) -> list[FeedListItem]:
+    rows = conn.execute(
         """
         SELECT f.id, f.url, f.title, f.site_url, f.folder_id, f.last_fetched_at,
                f.next_fetch_at, f.last_error,
@@ -114,6 +165,7 @@ def list_feeds(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         ORDER BY LOWER(f.title)
         """
     ).fetchall()
+    return [_feed_list_item(r) for r in rows]
 
 
 def list_feeds_filtered(
@@ -122,7 +174,7 @@ def list_feeds_filtered(
     query: str = "",
     folder_ids: list[int] | None = None,
     include_orphan: bool = True,
-) -> list[sqlite3.Row]:
+) -> list[FeedListItem]:
     where: list[str] = []
     params: list[SqlParam] = []
 
@@ -164,11 +216,12 @@ def list_feeds_filtered(
         {where_sql}
         ORDER BY f.id DESC
     """
-    return conn.execute(sql, params).fetchall()
+    rows = conn.execute(sql, params).fetchall()
+    return [_feed_list_item(r) for r in rows]
 
 
-def list_folders_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
+def list_folders_with_counts(conn: sqlite3.Connection) -> list[FolderWithCount]:
+    rows = conn.execute(
         """
         SELECT fo.id, fo.name, fo.parent_id, fo.position,
                COALESCE(fc.cnt, 0) AS feed_count
@@ -181,10 +234,11 @@ def list_folders_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         ORDER BY LOWER(fo.name)
         """
     ).fetchall()
+    return [_folder_with_count(r) for r in rows]
 
 
-def get_folder(conn: sqlite3.Connection, folder_id: int) -> sqlite3.Row | None:
-    row: sqlite3.Row | None = conn.execute(
+def get_folder(conn: sqlite3.Connection, folder_id: int) -> FolderWithCount | None:
+    row = conn.execute(
         """
         SELECT fo.id, fo.name, fo.parent_id, fo.position,
                COALESCE((SELECT COUNT(*) FROM feeds WHERE folder_id = fo.id), 0) AS feed_count
@@ -192,11 +246,11 @@ def get_folder(conn: sqlite3.Connection, folder_id: int) -> sqlite3.Row | None:
         """,
         (folder_id,),
     ).fetchone()
-    return row
+    return _folder_with_count(row) if row else None
 
 
-def get_feed(conn: sqlite3.Connection, feed_id: int) -> sqlite3.Row | None:
-    row: sqlite3.Row | None = conn.execute(
+def get_feed(conn: sqlite3.Connection, feed_id: int) -> FeedListItem | None:
+    row = conn.execute(
         """
         SELECT f.id, f.url, f.title, f.site_url, f.folder_id, f.last_fetched_at,
                f.next_fetch_at, f.last_error,
@@ -206,15 +260,15 @@ def get_feed(conn: sqlite3.Connection, feed_id: int) -> sqlite3.Row | None:
         """,
         (feed_id,),
     ).fetchone()
-    return row
+    return _feed_list_item(row) if row else None
 
 
-def get_feed_by_url(conn: sqlite3.Connection, url: str) -> sqlite3.Row | None:
-    row: sqlite3.Row | None = conn.execute(
+def get_feed_by_url(conn: sqlite3.Connection, url: str) -> FeedRef | None:
+    row = conn.execute(
         "SELECT id, title FROM feeds WHERE url = ?",
         (url,),
     ).fetchone()
-    return row
+    return FeedRef(id=row["id"], title=row["title"]) if row else None
 
 
 def get_feed_fetch_state(conn: sqlite3.Connection, feed_id: int) -> FeedFetchState | None:
@@ -263,7 +317,7 @@ def list_entries(
     unread_only: bool = True,
     limit: int = 100,
     offset: int = 0,
-) -> list[sqlite3.Row]:
+) -> list[EntryListItem]:
     where: list[str] = []
     params: list[SqlParam] = []
 
@@ -295,11 +349,12 @@ def list_entries(
         LIMIT ? OFFSET ?
     """
     params.extend([limit, offset])
-    return conn.execute(sql, params).fetchall()
+    rows = conn.execute(sql, params).fetchall()
+    return [_entry_list_item(r) for r in rows]
 
 
-def get_entry(conn: sqlite3.Connection, entry_id: int) -> sqlite3.Row | None:
-    row: sqlite3.Row | None = conn.execute(
+def get_entry(conn: sqlite3.Connection, entry_id: int) -> EntryDetail | None:
+    row = conn.execute(
         """
         SELECT e.*, f.title AS feed_title
         FROM entries e JOIN feeds f ON f.id = e.feed_id
@@ -307,7 +362,7 @@ def get_entry(conn: sqlite3.Connection, entry_id: int) -> sqlite3.Row | None:
         """,
         (entry_id,),
     ).fetchone()
-    return row
+    return _entry_detail(row) if row else None
 
 
 def mark_read(conn: sqlite3.Connection, entry_id: int, value: bool) -> None:
@@ -331,8 +386,10 @@ def toggle_star(conn: sqlite3.Connection, entry_id: int) -> bool:
     new_val = 0 if row["is_starred"] else 1
     with transaction(conn):
         conn.execute(
-            "UPDATE entries SET is_starred = ?, starred_at = CASE WHEN ? THEN datetime('now') ELSE NULL END WHERE id = ?",
-            (new_val, new_val, entry_id),
+            "UPDATE entries SET is_starred = :new_val, "
+            "starred_at = CASE WHEN :new_val THEN datetime('now') ELSE NULL END "
+            "WHERE id = :entry_id",
+            {"new_val": new_val, "entry_id": entry_id},
         )
     return bool(new_val)
 
@@ -375,9 +432,14 @@ def add_feed(
         cur = conn.execute(
             """
             INSERT INTO feeds (url, title, site_url, folder_id)
-            VALUES (?, ?, ?, ?)
+            VALUES (:url, :title, :site_url, :folder_id)
             """,
-            (url.strip(), title.strip(), site_url, folder_id),
+            {
+                "url": url.strip(),
+                "title": title.strip(),
+                "site_url": site_url,
+                "folder_id": folder_id,
+            },
         )
     assert cur.lastrowid is not None
     return cur.lastrowid
@@ -408,8 +470,15 @@ def record_feed_fetch_failure(
 ) -> None:
     with transaction(conn):
         conn.execute(
-            "UPDATE feeds SET last_error = ?, last_fetched_at = ?, next_fetch_at = ? WHERE id = ?",
-            (error, fetched_at, next_fetch_at, feed_id),
+            "UPDATE feeds SET last_error = :error, "
+            "last_fetched_at = :fetched_at, next_fetch_at = :next_fetch_at "
+            "WHERE id = :feed_id",
+            {
+                "error": error,
+                "fetched_at": fetched_at,
+                "next_fetch_at": next_fetch_at,
+                "feed_id": feed_id,
+            },
         )
 
 
@@ -419,18 +488,19 @@ def insert_parsed_entry(conn: sqlite3.Connection, feed_id: int, entry: ParsedEnt
             """
             INSERT INTO entries
                 (feed_id, guid, title, url, author, content, summary, published_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES
+                (:feed_id, :guid, :title, :url, :author, :content, :summary, :published_at)
             """,
-            (
-                feed_id,
-                entry.guid,
-                entry.title,
-                entry.url,
-                entry.author,
-                entry.content,
-                entry.summary,
-                entry.published_at,
-            ),
+            {
+                "feed_id": feed_id,
+                "guid": entry.guid,
+                "title": entry.title,
+                "url": entry.url,
+                "author": entry.author,
+                "content": entry.content,
+                "summary": entry.summary,
+                "published_at": entry.published_at,
+            },
         )
     except sqlite3.IntegrityError:
         return False
@@ -446,8 +516,8 @@ def update_feed_cache_headers(
 ) -> None:
     if etag or last_modified:
         conn.execute(
-            "UPDATE feeds SET etag = ?, last_modified = ? WHERE id = ?",
-            (etag, last_modified, feed_id),
+            "UPDATE feeds SET etag = :etag, last_modified = :last_modified WHERE id = :feed_id",
+            {"etag": etag, "last_modified": last_modified, "feed_id": feed_id},
         )
 
 
@@ -498,10 +568,19 @@ def record_feed_fetch_success(
 ) -> None:
     with transaction(conn):
         conn.execute(
-            "UPDATE feeds SET last_fetched_at = ?, next_fetch_at = ?, "
-            "fetch_interval_sec = ?, consecutive_empty = ?, last_error = NULL "
-            "WHERE id = ?",
-            (fetched_at, next_fetch_at, fetch_interval_sec, consecutive_empty, feed_id),
+            "UPDATE feeds SET last_fetched_at = :fetched_at, "
+            "next_fetch_at = :next_fetch_at, "
+            "fetch_interval_sec = :fetch_interval_sec, "
+            "consecutive_empty = :consecutive_empty, "
+            "last_error = NULL "
+            "WHERE id = :feed_id",
+            {
+                "fetched_at": fetched_at,
+                "next_fetch_at": next_fetch_at,
+                "fetch_interval_sec": fetch_interval_sec,
+                "consecutive_empty": consecutive_empty,
+                "feed_id": feed_id,
+            },
         )
 
 
@@ -518,37 +597,39 @@ def list_feed_ids(conn: sqlite3.Connection) -> list[int]:
     return [row["id"] for row in rows]
 
 
-def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> list[sqlite3.Row]:
+def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> list[EntryListItem]:
     q = query.strip()
     if not q:
         return []
     if len(q) < 3:
-        pat = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        return conn.execute(
+        like_pattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        rows = conn.execute(
             """
-            SELECT e.id, e.feed_id, e.title, e.url, e.summary, e.published_at,
+            SELECT e.id, e.feed_id, e.title, e.url, e.author, e.summary, e.published_at,
                    e.is_read, e.is_starred, f.title AS feed_title
             FROM entries e
             JOIN feeds f ON f.id = e.feed_id
-            WHERE e.title LIKE ? ESCAPE '\\'
-               OR e.summary LIKE ? ESCAPE '\\'
-               OR e.content LIKE ? ESCAPE '\\'
+            WHERE e.title LIKE :like_pattern ESCAPE '\\'
+               OR e.summary LIKE :like_pattern ESCAPE '\\'
+               OR e.content LIKE :like_pattern ESCAPE '\\'
             ORDER BY COALESCE(e.published_at, e.fetched_at) DESC
-            LIMIT ?
+            LIMIT :limit
             """,
-            (pat, pat, pat, limit),
+            {"like_pattern": like_pattern, "limit": limit},
         ).fetchall()
+        return [_entry_list_item(r) for r in rows]
     phrase = '"' + q.replace('"', '""') + '"'
-    return conn.execute(
+    rows = conn.execute(
         """
-        SELECT e.id, e.feed_id, e.title, e.url, e.summary, e.published_at,
+        SELECT e.id, e.feed_id, e.title, e.url, e.author, e.summary, e.published_at,
                e.is_read, e.is_starred, f.title AS feed_title
         FROM entries_fts
         JOIN entries e ON e.id = entries_fts.rowid
         JOIN feeds f ON f.id = e.feed_id
-        WHERE entries_fts MATCH ?
+        WHERE entries_fts MATCH :phrase
         ORDER BY COALESCE(e.published_at, e.fetched_at) DESC
-        LIMIT ?
+        LIMIT :limit
         """,
-        (phrase, limit),
+        {"phrase": phrase, "limit": limit},
     ).fetchall()
+    return [_entry_list_item(r) for r in rows]
