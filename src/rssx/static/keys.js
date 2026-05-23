@@ -292,6 +292,17 @@
     if (form) form.submit();
   }
 
+  function helpDialog() {
+    return document.getElementById("shortcut-help");
+  }
+
+  function toggleHelp() {
+    const dlg = helpDialog();
+    if (!dlg) return;
+    if (dlg.open) dlg.close();
+    else dlg.showModal();
+  }
+
   document.addEventListener("click", (ev) => {
     const row = ev.target.closest(".entry-row");
     if (!row || ev.target.closest(".star")) return;
@@ -308,6 +319,16 @@
   document.addEventListener("keydown", (ev) => {
     if (isTyping()) {
       if (ev.key === "Escape") ev.target.blur();
+      return;
+    }
+    const dlg = helpDialog();
+    if (ev.key === "?") {
+      ev.preventDefault();
+      toggleHelp();
+      return;
+    }
+    if (dlg && dlg.open) {
+      // While help is open, let the dialog handle Esc itself; ignore other keys.
       return;
     }
     if (ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
@@ -337,13 +358,6 @@
       case "k":
         ev.preventDefault();
         select(selectedIndex < 0 ? 0 : selectedIndex - 1, { expand: true });
-        break;
-      case "o":
-      case "Enter":
-        if (current) {
-          ev.preventDefault();
-          toggleExpand(current);
-        }
         break;
       case "m":
         if (current) {
@@ -384,14 +398,20 @@
 
   document.body.addEventListener("rssx:counts-changed", refreshSidebar);
 
+  function bindHelp() {
+    const dlg = helpDialog();
+    if (!dlg) return;
+    const closeBtn = dlg.querySelector(".shortcut-help-close");
+    if (closeBtn) closeBtn.addEventListener("click", () => dlg.close());
+    // Clicking the backdrop (outside the inner card) closes the dialog.
+    dlg.addEventListener("click", (ev) => {
+      if (ev.target === dlg) dlg.close();
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     applyFolderState(document);
     bindFolderToggles(document);
-    const list = entries();
-    if (list.length > 0) {
-      // Select first row but don't auto-expand on load.
-      list[0].classList.add("selected");
-      selectedIndex = 0;
-    }
+    bindHelp();
   });
 })();
