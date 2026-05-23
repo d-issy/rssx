@@ -17,6 +17,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         pyprojectContent = builtins.readFile ./pyproject.toml;
+        packageJsonContent = builtins.readFile ./package.json;
       in
       {
         devShells.default = pkgs.mkShell {
@@ -25,13 +26,19 @@
             uv
             sqlite
             just
+            nodejs_24
+            pnpm
+            treefmt
+            nixfmt
           ];
 
           shellHook = ''
             export UV_PYTHON=${pkgs.python314}/bin/python3.14
             : "${builtins.hashString "sha256" pyprojectContent}"
             uv sync --quiet
-            echo "rssx dev shell ready. Run: uv run rssx"
+            : "${builtins.hashString "sha256" packageJsonContent}"
+            pnpm install --silent
+            echo "rssx dev shell ready. Run: just dev"
           '';
         };
       }
