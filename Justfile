@@ -23,3 +23,7 @@ fmt:
 fix:
     uv run ruff check --fix
     uv run ruff format
+
+# Connect to the SQLite database
+db db_path="${XDG_DATA_HOME:-$HOME/.local/share}/rssx/rssx.db":
+    sqlite3 {{db_path}}
