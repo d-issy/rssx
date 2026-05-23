@@ -197,8 +197,26 @@ def update_feed_folder(conn: sqlite3.Connection, feed_id: int, folder_id: int | 
 
 
 def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> list[sqlite3.Row]:
-    if not query.strip():
+    q = query.strip()
+    if not q:
         return []
+    if len(q) < 3:
+        pat = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        return conn.execute(
+            """
+            SELECT e.id, e.feed_id, e.title, e.url, e.summary, e.published_at,
+                   e.is_read, e.is_starred, f.title AS feed_title
+            FROM entries e
+            JOIN feeds f ON f.id = e.feed_id
+            WHERE e.title LIKE ? ESCAPE '\\'
+               OR e.summary LIKE ? ESCAPE '\\'
+               OR e.content LIKE ? ESCAPE '\\'
+            ORDER BY COALESCE(e.published_at, e.fetched_at) DESC
+            LIMIT ?
+            """,
+            (pat, pat, pat, limit),
+        ).fetchall()
+    phrase = '"' + q.replace('"', '""') + '"'
     return conn.execute(
         """
         SELECT e.id, e.feed_id, e.title, e.url, e.summary, e.published_at,
@@ -210,5 +228,5 @@ def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> li
         ORDER BY COALESCE(e.published_at, e.fetched_at) DESC
         LIMIT ?
         """,
-        (query, limit),
+        (phrase, limit),
     ).fetchall()

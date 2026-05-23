@@ -59,7 +59,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
     title, content, summary,
     content='entries',
     content_rowid='id',
-    tokenize='unicode61'
+    tokenize='trigram'
 );
 
 CREATE TRIGGER IF NOT EXISTS entries_ai AFTER INSERT ON entries BEGIN
@@ -93,6 +93,28 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _ensure_fts_trigram(conn)
+
+
+def _ensure_fts_trigram(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='entries_fts'"
+    ).fetchone()
+    if not row or "tokenize='trigram'" in (row[0] or ""):
+        return
+    with transaction(conn):
+        conn.execute("DROP TABLE entries_fts")
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE entries_fts USING fts5(
+                title, content, summary,
+                content='entries',
+                content_rowid='id',
+                tokenize='trigram'
+            )
+            """
+        )
+        conn.execute("INSERT INTO entries_fts(entries_fts) VALUES('rebuild')")
 
 
 @contextmanager
