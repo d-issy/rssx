@@ -5,6 +5,47 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>rssx{% block title_suffix %}{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Apply persisted folder open/closed state before the body paints,
+    // so navigating between pages doesn't flash the default state first.
+    (function () {
+      var state;
+      try {
+        state = JSON.parse(localStorage.getItem("rssx.folderState") || "{}");
+      } catch (_e) {
+        return;
+      }
+      if (!state || !Object.keys(state).length) return;
+      function apply(el) {
+        var id = el.getAttribute("data-folder-id");
+        if (id != null && Object.prototype.hasOwnProperty.call(state, id)) {
+          el.open = !!state[id];
+        }
+      }
+      var mo = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var added = muts[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            var n = added[j];
+            if (n.nodeType !== 1) continue;
+            if (n.matches && n.matches("details[data-folder-id]")) apply(n);
+            if (n.querySelectorAll) {
+              var list = n.querySelectorAll("details[data-folder-id]");
+              for (var k = 0; k < list.length; k++) apply(list[k]);
+            }
+          }
+        }
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+      document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+          mo.disconnect();
+        },
+        { once: true }
+      );
+    })();
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
   <script src="/static/keys.js" defer></script>
   <script src="/static/localtime.js" defer></script>

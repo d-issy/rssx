@@ -27,6 +27,61 @@ def build_folder_tree(folders: list[sqlite3.Row]) -> list[dict]:
     return roots
 
 
+def build_sidebar_tree(
+    folders: list[sqlite3.Row], feeds: list[sqlite3.Row]
+) -> tuple[list[dict], list[sqlite3.Row], int]:
+    by_id: dict[int, dict] = {
+        f["id"]: {
+            "id": f["id"],
+            "name": f["name"],
+            "parent_id": f["parent_id"],
+            "children": [],
+            "feeds": [],
+            "unread_count": 0,
+        }
+        for f in folders
+    }
+
+    def in_cycle(nid: int) -> bool:
+        seen: set[int] = set()
+        cur: int | None = nid
+        while cur is not None and cur in by_id:
+            if cur in seen:
+                return True
+            seen.add(cur)
+            cur = by_id[cur]["parent_id"]
+        return False
+
+    roots: list[dict] = []
+    for node in by_id.values():
+        parent = node["parent_id"]
+        if parent is None or parent not in by_id or in_cycle(node["id"]):
+            roots.append(node)
+        else:
+            by_id[parent]["children"].append(node)
+
+    orphan_feeds: list[sqlite3.Row] = []
+    for feed in feeds:
+        fid = feed["folder_id"]
+        if fid is not None and fid in by_id:
+            by_id[fid]["feeds"].append(feed)
+        else:
+            orphan_feeds.append(feed)
+
+    def aggregate(node: dict) -> int:
+        total: int = sum(int(f["unread_count"]) for f in node["feeds"])
+        for child in node["children"]:
+            total += aggregate(child)
+        node["unread_count"] = total
+        return total
+
+    for root in roots:
+        aggregate(root)
+
+    orphan_unread = sum(int(f["unread_count"]) for f in orphan_feeds)
+    return roots, orphan_feeds, orphan_unread
+
+
 def list_feeds(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
@@ -80,6 +135,8 @@ def list_entries(
 
     if scope == "starred":
         where.append("e.is_starred = 1")
+    elif scope == "orphan":
+        where.append("f.folder_id IS NULL")
     elif scope == "folder" and folder_id is not None:
         ids = descendant_folder_ids(conn, folder_id)
         placeholders = ",".join("?" for _ in ids)

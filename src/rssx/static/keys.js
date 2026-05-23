@@ -63,6 +63,47 @@
     document.body.dispatchEvent(new CustomEvent("rssx:counts-changed"));
   }
 
+  const FOLDER_STATE_KEY = "rssx.folderState";
+
+  function loadFolderState() {
+    try {
+      return JSON.parse(localStorage.getItem(FOLDER_STATE_KEY) || "{}");
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function saveFolderState(state) {
+    try {
+      localStorage.setItem(FOLDER_STATE_KEY, JSON.stringify(state));
+    } catch (_e) {
+      // quota or disabled storage — ignore
+    }
+  }
+
+  function applyFolderState(root) {
+    const state = loadFolderState();
+    const nodes = (root || document).querySelectorAll("details[data-folder-id]");
+    nodes.forEach((d) => {
+      const id = d.getAttribute("data-folder-id");
+      if (Object.prototype.hasOwnProperty.call(state, id)) {
+        d.open = !!state[id];
+      }
+    });
+  }
+
+  function bindFolderToggles(root) {
+    const nodes = (root || document).querySelectorAll("details[data-folder-id]");
+    nodes.forEach((d) => {
+      d.addEventListener("toggle", () => {
+        const id = d.getAttribute("data-folder-id");
+        const state = loadFolderState();
+        state[id] = d.open;
+        saveFolderState(state);
+      });
+    });
+  }
+
   function refreshSidebar() {
     const params = new URLSearchParams(window.location.search);
     params.delete("unread");
@@ -73,7 +114,11 @@
         tmp.innerHTML = html.trim();
         const next = tmp.content.firstElementChild;
         const cur = document.getElementById("sidebar");
-        if (cur && next) cur.replaceWith(next);
+        if (cur && next) {
+          applyFolderState(next);
+          cur.replaceWith(next);
+          bindFolderToggles(next);
+        }
       });
   }
 
@@ -138,6 +183,89 @@
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  function navItems() {
+    const sb = document.querySelector(".sidebar");
+    if (!sb) return [];
+    const items = [];
+    sb.querySelectorAll("a.sidebar-link, a.folder-link, a.feed-link").forEach((a) => {
+      let url;
+      try {
+        url = new URL(a.getAttribute("href") || "", location.origin);
+      } catch (_e) {
+        return;
+      }
+      const scope = url.searchParams.get("scope");
+      if (!scope) return;
+      // Hidden by a collapsed ancestor <details>: offsetParent is null because
+      // the UA stylesheet hides non-summary children of closed <details>.
+      if (a.offsetParent === null) return;
+      items.push({
+        el: a,
+        scope: scope,
+        folder: url.searchParams.get("folder"),
+        feed: url.searchParams.get("feed"),
+      });
+    });
+    return items;
+  }
+
+  function currentNavIndex(items) {
+    const params = new URLSearchParams(location.search);
+    const scope = params.get("scope") || "all";
+    const folder = params.get("folder");
+    const feed = params.get("feed");
+    let idx = items.findIndex((it) => {
+      if (it.scope !== scope) return false;
+      if (scope === "folder") return it.folder === folder;
+      if (scope === "feed") return it.feed === feed;
+      return true;
+    });
+    if (idx >= 0) return idx;
+    if (scope === "feed" && feed != null) {
+      const parentId = currentFolderIdFromUrl();
+      if (parentId != null) {
+        idx = items.findIndex((it) => it.scope === "folder" && it.folder === parentId);
+      }
+    }
+    return idx;
+  }
+
+  function navItem(delta) {
+    const items = navItems();
+    if (!items.length) return;
+    let idx = currentNavIndex(items);
+    if (idx < 0) idx = delta > 0 ? 0 : items.length - 1;
+    else idx = (idx + delta + items.length) % items.length;
+    location.href = items[idx].el.getAttribute("href");
+  }
+
+  function currentFolderIdFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const scope = params.get("scope");
+    if (scope === "folder") return params.get("folder");
+    if (scope === "orphan") return "__orphan";
+    if (scope === "feed") {
+      const fid = params.get("feed");
+      const link = Array.from(document.querySelectorAll(".sidebar .feed-link")).find((a) => {
+        try {
+          return new URL(a.href, location.origin).searchParams.get("feed") === fid;
+        } catch (_e) {
+          return false;
+        }
+      });
+      const det = link && link.closest("details[data-folder-id]");
+      return det ? det.getAttribute("data-folder-id") : null;
+    }
+    return null;
+  }
+
+  function toggleCurrentFolder() {
+    const id = currentFolderIdFromUrl();
+    if (id == null) return;
+    const det = document.querySelector(`details[data-folder-id="${CSS.escape(id)}"]`);
+    if (det) det.open = !det.open;
+  }
+
   function focusSearch() {
     const el = document.getElementById("searchbox");
     if (el) {
@@ -168,6 +296,23 @@
     if (isTyping()) {
       if (ev.key === "Escape") ev.target.blur();
       return;
+    }
+    if (ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      // Use ev.code for layout-independent sidebar shortcuts (non-Latin / IME).
+      switch (ev.code) {
+        case "KeyJ":
+          ev.preventDefault();
+          navItem(1);
+          return;
+        case "KeyK":
+          ev.preventDefault();
+          navItem(-1);
+          return;
+        case "KeyX":
+          ev.preventDefault();
+          toggleCurrentFolder();
+          return;
+      }
     }
     const list = entries();
     const current = selectedIndex >= 0 ? list[selectedIndex] : null;
@@ -227,6 +372,8 @@
   document.body.addEventListener("rssx:counts-changed", refreshSidebar);
 
   document.addEventListener("DOMContentLoaded", () => {
+    applyFolderState(document);
+    bindFolderToggles(document);
     const list = entries();
     if (list.length > 0) {
       // Select first row but don't auto-expand on load.

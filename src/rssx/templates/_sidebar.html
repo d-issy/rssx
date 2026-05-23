@@ -1,4 +1,9 @@
 <nav class="sidebar" id="sidebar">
+  <div class="sidebar-scroll">
+  <div class="brand">
+    <a class="brand-link" href="/">rssx</a>
+  </div>
+
   <div class="sidebar-section">
     <a class="sidebar-link {% if scope == 'all' %}active{% endif %}" href="/?scope=all">
       <span>すべて</span><span class="badge">{{ unread_total }}</span>
@@ -8,43 +13,61 @@
     </a>
   </div>
 
-  {% macro render_folder(node) -%}
+  {% macro render_feed(feed) -%}
     <li>
-      <a class="sidebar-link {% if scope == 'folder' and current_folder_id == node.id %}active{% endif %}"
-         href="/?scope=folder&folder={{ node.id }}">
-        <span>📁 {{ node.name }}</span>
+      <a class="sidebar-link feed-link {% if scope == 'feed' and current_feed_id == feed.id %}active{% endif %}"
+         href="/?scope=feed&feed={{ feed.id }}">
+        <span class="truncate">{{ feed.title }}</span>
+        {% if feed.unread_count %}<span class="badge">{{ feed.unread_count }}</span>{% endif %}
       </a>
-      {% if node.children %}
-        <ul class="folder-children">
+    </li>
+  {%- endmacro %}
+
+  {% macro render_folder(node) -%}
+    <li class="folder-node">
+      <details data-folder-id="{{ node.id }}">
+        <summary class="folder-summary {% if scope == 'folder' and current_folder_id == node.id %}active{% endif %}">
+          <span class="folder-chevron" aria-hidden="true"></span>
+          <a class="folder-link" href="/?scope=folder&folder={{ node.id }}"
+             onclick="event.preventDefault(); location.href = this.href;">
+            <span class="truncate">{{ node.name }}</span>
+          </a>
+          {% if node.unread_count %}<span class="badge">{{ node.unread_count }}</span>{% endif %}
+        </summary>
+        <ul class="folder-contents">
           {% for child in node.children %}{{ render_folder(child) }}{% endfor %}
+          {% for feed in node.feeds %}{{ render_feed(feed) }}{% endfor %}
         </ul>
-      {% endif %}
+      </details>
     </li>
   {%- endmacro %}
 
   <div class="sidebar-section">
-    <div class="sidebar-heading">フォルダ</div>
+    <div class="sidebar-heading">フィード</div>
     <ul class="folder-tree">
       {% for node in folder_tree %}{{ render_folder(node) }}{% endfor %}
-    </ul>
-  </div>
-
-  <div class="sidebar-section">
-    <div class="sidebar-heading">フィード</div>
-    <ul class="feed-list">
-      {% for feed in feeds %}
-        <li>
-          <a class="sidebar-link {% if scope == 'feed' and current_feed_id == feed.id %}active{% endif %}"
-             href="/?scope=feed&feed={{ feed.id }}">
-            <span class="truncate">{{ feed.title }}</span>
-            <span class="badge">{{ feed.unread_count }}</span>
-          </a>
+      {% if orphan_feeds %}
+        <li class="folder-node">
+          <details data-folder-id="__orphan"{% if not folder_tree %} open{% endif %}>
+            <summary class="folder-summary {% if scope == 'orphan' %}active{% endif %}">
+              <span class="folder-chevron" aria-hidden="true"></span>
+              <a class="folder-link" href="/?scope=orphan"
+                 onclick="event.preventDefault(); location.href = this.href;">
+                <span class="truncate">未分類</span>
+              </a>
+              {% if orphan_unread %}<span class="badge">{{ orphan_unread }}</span>{% endif %}
+            </summary>
+            <ul class="folder-contents">
+              {% for feed in orphan_feeds %}{{ render_feed(feed) }}{% endfor %}
+            </ul>
+          </details>
         </li>
-      {% endfor %}
+      {% endif %}
     </ul>
   </div>
 
-  <div class="sidebar-section">
+  </div>
+  <div class="sidebar-footer">
     <a class="sidebar-link" href="/manage">⚙ 管理</a>
   </div>
 </nav>

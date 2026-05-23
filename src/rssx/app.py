@@ -112,14 +112,15 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     def render_index(request: Request, scope_args: dict, entries):
         folders = q.list_folders(conn)
-        folder_tree = q.build_folder_tree(folders)
         feeds = q.list_feeds(conn)
+        folder_tree, orphan_feeds, orphan_unread = q.build_sidebar_tree(folders, feeds)
         return TEMPLATES.TemplateResponse(
             request,
             "index.html",
             {
                 "folder_tree": folder_tree,
-                "feeds": feeds,
+                "orphan_feeds": orphan_feeds,
+                "orphan_unread": orphan_unread,
                 "entries": entries,
                 "unread_total": q.get_unread_total(conn),
                 "starred_total": q.get_starred_total(conn),
@@ -189,12 +190,15 @@ def create_app(config: Config | None = None) -> FastAPI:
         feed: int | None = None,
     ):
         folders = q.list_folders(conn)
+        feeds = q.list_feeds(conn)
+        folder_tree, orphan_feeds, orphan_unread = q.build_sidebar_tree(folders, feeds)
         return TEMPLATES.TemplateResponse(
             request,
             "_sidebar.html",
             {
-                "folder_tree": q.build_folder_tree(folders),
-                "feeds": q.list_feeds(conn),
+                "folder_tree": folder_tree,
+                "orphan_feeds": orphan_feeds,
+                "orphan_unread": orphan_unread,
                 "unread_total": q.get_unread_total(conn),
                 "starred_total": q.get_starred_total(conn),
                 "scope": scope,
