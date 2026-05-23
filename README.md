@@ -43,16 +43,4 @@ scheduler_tick_min = 1
 
 ## Keybindings
 
-| Key | Action |
-| --- | --- |
-| `j` / `k` | Select next / previous entry (expands inline) |
-| `o` / Enter | Toggle expansion of the selected entry |
-| `m` | Toggle read / unread |
-| `f` | Toggle star |
-| `v` | Open original article in a new tab |
-| `r` | Refresh all feeds |
-| `/` | Focus search box |
-| `g` / `G` | Jump to first / last entry |
-| `Esc` | Blur the search box |
-
-An entry is marked read automatically after staying expanded for 2 seconds.
+Press `?` in the app to view the keyboard shortcut list.

@@ -217,3 +217,82 @@ ul.folder-contents { padding-left: 14px; }
 .list li { padding: 8px 0; border-top: 1px solid #f3f4f6; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .list small { color: #6b7280; word-break: break-all; }
 .error { color: #b91c1c; }
+
+.sidebar-hint {
+  margin: 6px 8px 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+.sidebar-hint kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 0 4px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  color: #6b7280;
+}
+
+.shortcut-help {
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-width: 520px;
+  width: 90vw;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  color: #222;
+  background: #fff;
+}
+.shortcut-help::backdrop { background: rgba(0, 0, 0, 0.4); }
+.shortcut-help-inner { padding: 16px 20px 20px; }
+.shortcut-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.shortcut-help-header h2 { font-size: 15px; margin: 0; }
+.shortcut-help-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  line-height: 1;
+  font-size: 16px;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.shortcut-help-close:hover { color: #111; }
+.shortcut-help-section { margin-top: 10px; }
+.shortcut-help-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 0 0 6px;
+}
+.shortcut-help-section dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+.shortcut-help-section dt { white-space: nowrap; }
+.shortcut-help-section dd { margin: 0; color: #374151; }
+.shortcut-help kbd {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  background: #f3f4f6;
+  border: 1px solid #d4d4d8;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: #111;
+}
+.shortcut-help-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}

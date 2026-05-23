@@ -72,5 +72,41 @@
 </head>
 <body>
   {% block body %}{% endblock %}
+
+  <dialog id="shortcut-help" class="shortcut-help" aria-label="キーボードショートカット">
+    <div class="shortcut-help-inner">
+      <header class="shortcut-help-header">
+        <h2>キーボードショートカット</h2>
+        <button type="button" class="shortcut-help-close" aria-label="閉じる">×</button>
+      </header>
+      <section class="shortcut-help-section">
+        <h3>記事</h3>
+        <dl>
+          <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>次／前の記事を選択（インライン展開）</dd>
+          <dt><kbd>m</kbd></dt><dd>既読／未読を切り替え</dd>
+          <dt><kbd>f</kbd></dt><dd>スターを切り替え</dd>
+          <dt><kbd>v</kbd></dt><dd>元記事を新しいタブで開く</dd>
+          <dt><kbd>g</kbd> / <kbd>G</kbd></dt><dd>最初／最後の記事へジャンプ</dd>
+        </dl>
+      </section>
+      <section class="shortcut-help-section">
+        <h3>サイドバー</h3>
+        <dl>
+          <dt><kbd>Shift</kbd>+<kbd>J</kbd> / <kbd>K</kbd></dt><dd>次／前のフィード・フォルダへ移動</dd>
+          <dt><kbd>Shift</kbd>+<kbd>X</kbd></dt><dd>現在のフォルダを開閉</dd>
+        </dl>
+      </section>
+      <section class="shortcut-help-section">
+        <h3>全体</h3>
+        <dl>
+          <dt><kbd>r</kbd></dt><dd>すべてのフィードを更新</dd>
+          <dt><kbd>/</kbd></dt><dd>検索ボックスにフォーカス</dd>
+          <dt><kbd>Esc</kbd></dt><dd>検索ボックスのフォーカスを外す／このヘルプを閉じる</dd>
+          <dt><kbd>?</kbd></dt><dd>このヘルプの表示／非表示</dd>
+        </dl>
+      </section>
+      <p class="shortcut-help-note">記事は展開してから2秒経過すると自動的に既読になります。</p>
+    </div>
+  </dialog>
 </body>
 </html>
