@@ -53,7 +53,28 @@
     const id = entryEl.dataset.entryId;
     fetch(`/entries/${id}/read?value=${value ? 1 : 0}`, { method: "POST" })
       .then((r) => r.text())
-      .then((html) => replaceEntry(entryEl, html));
+      .then((html) => {
+        replaceEntry(entryEl, html);
+        notifyCountsChanged();
+      });
+  }
+
+  function notifyCountsChanged() {
+    document.body.dispatchEvent(new CustomEvent("rssx:counts-changed"));
+  }
+
+  function refreshSidebar() {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("unread");
+    fetch(`/sidebar?${params.toString()}`)
+      .then((r) => r.text())
+      .then((html) => {
+        const tmp = document.createElement("template");
+        tmp.innerHTML = html.trim();
+        const next = tmp.content.firstElementChild;
+        const cur = document.getElementById("sidebar");
+        if (cur && next) cur.replaceWith(next);
+      });
   }
 
   function replaceEntry(entryEl, html) {
@@ -106,7 +127,10 @@
     const id = entryEl.dataset.entryId;
     fetch(`/entries/${id}/star`, { method: "POST" })
       .then((r) => r.text())
-      .then((html) => replaceEntry(entryEl, html));
+      .then((html) => {
+        replaceEntry(entryEl, html);
+        notifyCountsChanged();
+      });
   }
 
   function openOriginal(entryEl) {
@@ -196,6 +220,8 @@
         break;
     }
   });
+
+  document.body.addEventListener("rssx:counts-changed", refreshSidebar);
 
   document.addEventListener("DOMContentLoaded", () => {
     const list = entries();

@@ -139,7 +139,12 @@ def create_app(config: Config | None = None) -> FastAPI:
         return resp
 
     @app.get("/sidebar", response_class=HTMLResponse)
-    def sidebar(request: Request):
+    def sidebar(
+        request: Request,
+        scope: str = "all",
+        folder: int | None = None,
+        feed: int | None = None,
+    ):
         folders = q.list_folders(conn)
         return TEMPLATES.TemplateResponse(
             request,
@@ -149,6 +154,9 @@ def create_app(config: Config | None = None) -> FastAPI:
                 "feeds": q.list_feeds(conn),
                 "unread_total": q.get_unread_total(conn),
                 "starred_total": q.get_starred_total(conn),
+                "scope": scope,
+                "current_folder_id": folder,
+                "current_feed_id": feed,
             },
         )
 
