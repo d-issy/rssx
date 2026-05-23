@@ -16,6 +16,13 @@
     return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
   }
 
+  function collapse(entryEl) {
+    const body = entryEl.querySelector(".entry-body");
+    if (!body || body.hidden) return;
+    body.hidden = true;
+    entryEl.classList.remove("expanded");
+  }
+
   function select(index, opts = {}) {
     const list = entries();
     if (list.length === 0) return;
@@ -24,8 +31,14 @@
     selectedIndex = index;
     const el = list[index];
     el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    if (opts.expand && !el.classList.contains("expanded")) {
-      toggleExpand(el);
+    if (opts.expand) {
+      clearAutoRead();
+      list.forEach((other, i) => {
+        if (i !== index) collapse(other);
+      });
+      if (!el.classList.contains("expanded")) {
+        toggleExpand(el);
+      }
     }
   }
 
