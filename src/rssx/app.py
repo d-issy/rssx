@@ -79,9 +79,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     init_schema(conn)
 
     fetch_cfg = FetchConfig(
-        min_interval_sec=config.min_interval_sec,
-        max_interval_sec=config.max_interval_sec,
-        initial_interval_sec=config.initial_interval_sec,
+        min_interval_sec=config.min_interval_min * 60,
+        max_interval_sec=config.max_interval_min * 60,
+        initial_interval_sec=config.initial_interval_min * 60,
     )
 
     scheduler = AsyncIOScheduler()
@@ -95,7 +95,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         scheduler.add_job(
             lambda: fetch_due_feeds(conn, fetch_cfg),
             "interval",
-            seconds=config.scheduler_tick_sec,
+            seconds=config.scheduler_tick_min * 60,
             id="rssx-poll",
         )
         scheduler.start()
