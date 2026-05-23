@@ -9,7 +9,7 @@ nix develop
 uv run rssx
 ```
 
-Defaults to `http://0.0.0.0:8080`.
+Defaults to `http://localhost:8080`.
 
 ## Configuration
 
@@ -17,7 +17,7 @@ Optional `~/.config/rssx/config.toml`:
 
 ```toml
 db_path = "~/.local/share/rssx/rssx.db"
-host = "0.0.0.0"
+host = "localhost"
 port = 8080
 
 [fetch]

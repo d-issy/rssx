@@ -15,7 +15,7 @@ def xdg_config_home() -> Path:
 @dataclass
 class Config:
     db_path: Path = field(default_factory=lambda: xdg_data_home() / "rssx" / "rssx.db")
-    host: str = "0.0.0.0"
+    host: str = "localhost"
     port: int = 8080
     min_interval_sec: int = 10 * 60
     max_interval_sec: int = 24 * 60 * 60
