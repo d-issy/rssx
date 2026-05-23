@@ -1,9 +1,13 @@
 default:
     @just --list
 
-# Start the dev server
+# Start the server
 run:
     uv run rssx
+
+# Start the dev server with hot reload (server restart + browser auto-reload)
+dev:
+    RSSX_DEV=1 uv run rssx
 
 # Run all checks (lint + format check + typecheck)
 lint:

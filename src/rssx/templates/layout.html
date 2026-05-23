@@ -7,6 +7,26 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
   <script src="/static/keys.js" defer></script>
+  {% if dev_mode %}
+  <script>
+    (function () {
+      if (!window.EventSource) return;
+      let opened = false;
+      function connect() {
+        const es = new EventSource("/__dev/ping");
+        es.onopen = () => {
+          if (opened) location.reload();
+          opened = true;
+        };
+        es.onerror = () => {
+          es.close();
+          setTimeout(connect, 300);
+        };
+      }
+      connect();
+    })();
+  </script>
+  {% endif %}
 </head>
 <body>
   {% block body %}{% endblock %}

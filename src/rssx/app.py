@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -26,6 +28,8 @@ log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+DEV_MODE = bool(os.environ.get("RSSX_DEV"))
+TEMPLATES.env.globals["dev_mode"] = DEV_MODE
 
 
 def create_app(config: Config | None = None) -> FastAPI:
@@ -228,6 +232,18 @@ def create_app(config: Config | None = None) -> FastAPI:
     def feed_delete(feed_id: int):
         q.delete_feed(conn, feed_id)
         return RedirectResponse("/manage", status_code=303)
+
+    if DEV_MODE:
+
+        @app.get("/__dev/ping")
+        async def dev_ping():
+            async def gen():
+                yield ": connected\n\n"
+                while True:
+                    await asyncio.sleep(15)
+                    yield ": ping\n\n"
+
+            return StreamingResponse(gen(), media_type="text/event-stream")
 
     @app.post("/feeds/{feed_id}/edit")
     def feed_edit(
