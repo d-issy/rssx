@@ -6,7 +6,7 @@ export default defineConfig({
     outDir: resolve(__dirname, "src/rssx/static/dist"),
     emptyOutDir: true,
     sourcemap: true,
-    minify: "esbuild",
+    minify: "oxc",
     target: "es2020",
     lib: {
       entry: resolve(__dirname, "frontend/main.ts"),
