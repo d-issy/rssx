@@ -1,29 +1,15 @@
-import json
 from pathlib import Path
 
+from factories import seed_feed
 from fastapi.testclient import TestClient
 
-from rssx import queries as q
 from rssx.app import create_app
 from rssx.config import Config
-from rssx.db import connect, init_schema
+from rssx.lib.htmx import HtmxEvent, trigger_names
 
 
-def seed_feed(db_path: Path) -> tuple[int, int]:
-    conn = connect(db_path)
-    try:
-        init_schema(conn)
-        folder_id = q.add_folder(conn, "Tech")
-        feed_id = q.add_feed(
-            conn,
-            url="https://example.com/feed.xml",
-            title="Example Feed",
-            site_url="https://example.com",
-            folder_id=folder_id,
-        )
-        return folder_id, feed_id
-    finally:
-        conn.close()
+def make_client(db_path: Path) -> TestClient:
+    return TestClient(create_app(Config(db_path=db_path), run_startup_fetch=False))
 
 
 def test_manage_htmx_returns_dialog_fragment(client: TestClient) -> None:
@@ -37,12 +23,11 @@ def test_manage_htmx_returns_dialog_fragment(client: TestClient) -> None:
     assert 'hx-target="#manage-feed-list"' in resp.text
 
 
-def test_manage_feed_list_contains_htmx_edit_contract(db_path: Path, monkeypatch) -> None:
+def test_manage_feed_list_contains_htmx_edit_contract(db_path: Path) -> None:
     folder_id, feed_id = seed_feed(db_path)
-    monkeypatch.setattr("rssx.app.fetch_all", lambda *_args, **_kwargs: 0)
-    app = create_app(Config(db_path=db_path))
+    assert folder_id is not None
 
-    with TestClient(app) as client:
+    with make_client(db_path) as client:
         resp = client.get("/manage/feeds", headers={"HX-Request": "true"})
 
     assert resp.status_code == 200
@@ -53,12 +38,10 @@ def test_manage_feed_list_contains_htmx_edit_contract(db_path: Path, monkeypatch
     assert f'<option value="{folder_id}" selected>Tech</option>' in resp.text
 
 
-def test_feed_folder_edit_returns_row_and_hx_triggers(db_path: Path, monkeypatch) -> None:
+def test_feed_folder_edit_returns_row_and_hx_triggers(db_path: Path) -> None:
     _, feed_id = seed_feed(db_path)
-    monkeypatch.setattr("rssx.app.fetch_all", lambda *_args, **_kwargs: 0)
-    app = create_app(Config(db_path=db_path))
 
-    with TestClient(app) as client:
+    with make_client(db_path) as client:
         resp = client.post(
             f"/feeds/{feed_id}/edit",
             data={"folder_id": "__none"},
@@ -68,9 +51,9 @@ def test_feed_folder_edit_returns_row_and_hx_triggers(db_path: Path, monkeypatch
     assert resp.status_code == 200
     assert f'id="manage-feed-{feed_id}"' in resp.text
     assert f'hx-post="/feeds/{feed_id}/edit"' in resp.text
-    triggers = json.loads(resp.headers["HX-Trigger"])
-    assert "rssx:counts-changed" in triggers
-    assert "rssx:feed-folder-changed" in triggers
+    triggers = trigger_names(resp.headers["HX-Trigger"])
+    assert HtmxEvent.COUNTS_CHANGED in triggers
+    assert HtmxEvent.FEED_FOLDER_CHANGED in triggers
 
 
 def test_folder_create_htmx_returns_folder_list_and_trigger(client: TestClient) -> None:
@@ -83,5 +66,4 @@ def test_folder_create_htmx_returns_folder_list_and_trigger(client: TestClient) 
     assert resp.status_code == 200
     assert "News" in resp.text
     assert 'class="manage-folder-row"' in resp.text
-    triggers = json.loads(resp.headers["HX-Trigger"])
-    assert "rssx:counts-changed" in triggers
+    assert HtmxEvent.COUNTS_CHANGED in trigger_names(resp.headers["HX-Trigger"])

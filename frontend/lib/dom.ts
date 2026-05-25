@@ -10,9 +10,3 @@ export function parseFragment<T extends Element = HTMLElement>(html: string): T 
   tmp.innerHTML = html.trim();
   return tmp.content.firstElementChild as T | null;
 }
-
-export const COUNTS_CHANGED_EVENT = "rssx:counts-changed";
-
-export function dispatchCountsChanged(): void {
-  document.body.dispatchEvent(new CustomEvent(COUNTS_CHANGED_EVENT));
-}

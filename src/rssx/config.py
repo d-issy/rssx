@@ -1,15 +1,8 @@
-import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
-def xdg_data_home() -> Path:
-    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-
-
-def xdg_config_home() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+from rssx.lib.paths import xdg_config_home, xdg_data_home
 
 
 @dataclass

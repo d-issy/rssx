@@ -65,6 +65,7 @@ skip_covered = true
 [tool.mypy]
 python_version = "3.14"
 files = ["src"]
+mypy_path = ["typings"]
 strict_optional = true
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -73,5 +74,5 @@ no_implicit_optional = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["feedparser", "apscheduler.*"]
+module = ["apscheduler.*"]
 ignore_missing_imports = true

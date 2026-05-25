@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { refresh } from "../relative-time";
+import { refresh } from "../lib/relative-time";
 
 beforeEach(() => {
   vi.useFakeTimers();

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { refresh } from "../localtime";
+import { refresh } from "../lib/localtime";
 
 afterEach(() => {
   document.body.innerHTML = "";

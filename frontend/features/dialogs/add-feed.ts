@@ -1,10 +1,7 @@
-import { dispatchCountsChanged } from "./dom";
-import { toast } from "./toast";
-
-declare const htmx: {
-  ajax: (method: string, url: string, opts: Record<string, unknown>) => Promise<void>;
-  process: (root: Element | Document) => void;
-};
+import { DomainEvent, dispatch } from "../../lib/events";
+import { ajax } from "../../lib/htmx";
+import { postForm } from "../../lib/http";
+import { toast } from "../../lib/toast";
 
 function getDialog(): HTMLDialogElement | null {
   return document.getElementById("add-feed-dialog") as HTMLDialogElement | null;
@@ -22,7 +19,7 @@ async function loadContent(): Promise<void> {
   const body = getBody();
   if (!body) return;
   body.innerHTML = '<p class="add-feed-loading">読み込み中…</p>';
-  await htmx.ajax("GET", "/add-feed", { target: "#add-feed-body", swap: "innerHTML" });
+  await ajax("GET", "/add-feed", { target: "#add-feed-body", swap: "innerHTML" });
 }
 
 async function openDialog(): Promise<void> {
@@ -89,11 +86,7 @@ function bindForm(root: HTMLElement): void {
       submitBtn.textContent = "追加中…";
     }
     try {
-      const res = await fetch("/feeds", {
-        method: "POST",
-        body: data,
-        headers: { "HX-Request": "true" },
-      });
+      const res = await postForm("/feeds", data);
       if (!res.ok) {
         let msg = `フィードを追加できませんでした (HTTP ${res.status})`;
         const text = await res.text();
@@ -107,9 +100,9 @@ function bindForm(root: HTMLElement): void {
         return;
       }
       closeDialog();
-      dispatchCountsChanged();
+      dispatch(DomainEvent.COUNTS_CHANGED);
       toast("フィードを追加しました");
-      document.body.dispatchEvent(new CustomEvent("rssx:feed-added"));
+      dispatch(DomainEvent.FEED_ADDED);
     } catch (err) {
       showError(form, `通信エラー: ${(err as Error).message}`);
     } finally {

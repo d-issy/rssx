@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { COUNTS_CHANGED_EVENT, dispatchCountsChanged, isTyping, parseFragment } from "../dom";
+import { DomainEvent, dispatch, listen } from "../lib/events";
+import { isTyping, parseFragment } from "../lib/dom";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -32,13 +33,13 @@ describe("parseFragment", () => {
   });
 });
 
-describe("dispatchCountsChanged", () => {
-  it("dispatches the counts changed event on body", () => {
-    const listener = vi.fn();
-    document.body.addEventListener(COUNTS_CHANGED_EVENT, listener);
+describe("events", () => {
+  it("dispatch fires the named DomainEvent on body", () => {
+    const handler = vi.fn();
+    listen(DomainEvent.COUNTS_CHANGED, handler);
 
-    dispatchCountsChanged();
+    dispatch(DomainEvent.COUNTS_CHANGED);
 
-    expect(listener).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledOnce();
   });
 });

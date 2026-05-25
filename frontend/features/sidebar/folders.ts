@@ -1,4 +1,5 @@
-import { COUNTS_CHANGED_EVENT, parseFragment } from "./dom";
+import { parseFragment } from "../../lib/dom";
+import { DomainEvent, listen } from "../../lib/events";
 
 const FOLDER_STATE_KEY = "rssx.folderState";
 
@@ -93,5 +94,5 @@ export function install(): void {
     applyFolderState(document);
     bindFolderToggles(document);
   });
-  document.body.addEventListener(COUNTS_CHANGED_EVENT, refreshSidebar);
+  listen(DomainEvent.COUNTS_CHANGED, refreshSidebar);
 }
