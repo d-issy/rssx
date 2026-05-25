@@ -1,4 +1,5 @@
-import { dispatchCountsChanged, parseFragment } from "./dom";
+import { parseFragment } from "../lib/dom";
+import { DomainEvent, dispatch } from "../lib/events";
 
 const READ_DELAY_MS = 2000;
 
@@ -43,7 +44,7 @@ async function markRead(entryEl: HTMLElement, value: boolean): Promise<void> {
   const res = await fetch(`/entries/${id}/read?value=${value ? 1 : 0}`, { method: "POST" });
   const html = await res.text();
   replaceEntry(entryEl, html);
-  dispatchCountsChanged();
+  dispatch(DomainEvent.COUNTS_CHANGED);
 }
 
 async function loadEntryBody(body: HTMLElement, id: string): Promise<void> {
@@ -101,7 +102,7 @@ export async function toggleStar(entryEl: HTMLElement): Promise<void> {
   const res = await fetch(`/entries/${id}/star`, { method: "POST" });
   const html = await res.text();
   replaceEntry(entryEl, html);
-  dispatchCountsChanged();
+  dispatch(DomainEvent.COUNTS_CHANGED);
 }
 
 export function openOriginal(entryEl: HTMLElement): void {

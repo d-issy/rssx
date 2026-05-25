@@ -1,4 +1,6 @@
-import { isTyping } from "./dom";
+import { isTyping } from "../lib/dom";
+import { isOpen as isManageOpen } from "./dialogs/manage";
+import { isHelpOpen, toggleHelp } from "./dialogs/help";
 import {
   getSelected,
   openOriginal,
@@ -8,10 +10,8 @@ import {
   toggleRead,
   toggleStar,
 } from "./entries";
-import { toggleCurrentFolder } from "./folders";
-import { isHelpOpen, toggleHelp } from "./help-dialog";
-import { isOpen as isManageOpen } from "./manage-dialog";
-import { navItem } from "./sidebar-nav";
+import { toggleCurrentFolder } from "./sidebar/folders";
+import { navItem } from "./sidebar/nav";
 
 function focusSearch(): void {
   const el = document.getElementById("searchbox") as HTMLInputElement | null;
