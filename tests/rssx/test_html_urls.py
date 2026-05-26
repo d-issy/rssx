@@ -17,7 +17,7 @@ def test_parse_feed_resolves_relative_entry_content_urls() -> None:
     </rss>
     """
 
-    parsed = parse_feed(xml, fallback_title="fallback", base_url="https://example.com/feed.xml")
+    parsed = parse_feed(xml, fallback_title="fallback", source_url="https://example.com/feed.xml")
 
     content = parsed.entries[0].content
     assert 'src="https://example.com/greenteagc/timeline.png"' in content
@@ -40,6 +40,6 @@ def test_parse_feed_leaves_absolute_urls_unchanged() -> None:
     </rss>
     """
 
-    parsed = parse_feed(xml, fallback_title="fallback", base_url="https://example.com/feed.xml")
+    parsed = parse_feed(xml, fallback_title="fallback", source_url="https://example.com/feed.xml")
 
     assert 'src="https://cdn.example.com/x.png"' in parsed.entries[0].content
