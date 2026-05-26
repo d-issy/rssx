@@ -30,6 +30,8 @@
             pnpm
             treefmt
             nixfmt
+            actionlint
+            zizmor
           ];
 
           shellHook = ''
