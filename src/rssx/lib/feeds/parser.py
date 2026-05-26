@@ -73,8 +73,11 @@ def parse_entry(entry: feedparser.FeedParserDict) -> ParsedEntry:
     )
 
 
-def parse_feed(text: str, *, fallback_title: str) -> ParsedFeed:
-    parsed = feedparser.parse(text)
+def parse_feed(text: str, *, fallback_title: str, source_url: str | None = None) -> ParsedFeed:
+    # Pass the feed's fetch URL as content-location so feedparser can resolve
+    # relative URLs in entry HTML against it.
+    response_headers = {"content-location": source_url} if source_url else None
+    parsed = feedparser.parse(text, response_headers=response_headers)
     title = (_optional_str(parsed.feed.get("title")) or fallback_title).strip()
     site_url = _optional_str(parsed.feed.get("link"))
     return ParsedFeed(

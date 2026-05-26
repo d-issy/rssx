@@ -26,7 +26,7 @@ def to_iso(dt: datetime | None) -> str | None:
 def probe_feed_title(url: str) -> tuple[str, str | None]:
     resp = fetch_url(url)
     resp.raise_for_status()
-    parsed = parse_feed(resp.text, fallback_title=url)
+    parsed = parse_feed(resp.text, fallback_title=url, source_url=url)
     return parsed.title, parsed.site_url
 
 
@@ -53,7 +53,7 @@ def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None =
     if resp.status_code == 304:
         log.info("not modified: %s", feed.url)
     else:
-        parsed = parse_feed(resp.text, fallback_title=feed.url)
+        parsed = parse_feed(resp.text, fallback_title=feed.url, source_url=feed.url)
         new_count = repo.store_fetched_entries(
             conn,
             feed_id,
