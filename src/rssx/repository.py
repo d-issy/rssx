@@ -83,7 +83,6 @@ def _entry_detail(row: sqlite3.Row) -> EntryDetail:
         read_at=parse_stored_datetime(row["read_at"]),
         starred_at=parse_stored_datetime(row["starred_at"]),
         feed_title=row["feed_title"],
-        feed_site_url=row["feed_site_url"],
     )
 
 
@@ -357,7 +356,7 @@ def list_entries(
 def get_entry(conn: sqlite3.Connection, entry_id: int) -> EntryDetail | None:
     row = conn.execute(
         """
-        SELECT e.*, f.title AS feed_title, f.site_url AS feed_site_url
+        SELECT e.*, f.title AS feed_title
         FROM entries e JOIN feeds f ON f.id = e.feed_id
         WHERE e.id = ?
         """,

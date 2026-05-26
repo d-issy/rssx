@@ -69,7 +69,6 @@ class EntryDetail:
     read_at: datetime | None
     starred_at: datetime | None
     feed_title: str
-    feed_site_url: str | None
 
 
 @dataclass

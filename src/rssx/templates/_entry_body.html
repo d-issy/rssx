@@ -8,6 +8,6 @@
     </div>
   </header>
   <div class="entry-content">
-    {{ entry.content|absolutize_urls(entry.url or entry.feed_site_url)|safe }}
+    {{ entry.content|safe }}
   </div>
 </article>

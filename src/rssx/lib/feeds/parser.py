@@ -6,7 +6,6 @@ from time import struct_time
 import feedparser
 
 from rssx.lib.feeds.models import ParsedEntry, ParsedFeed
-from rssx.lib.html import absolutize_html_urls
 
 
 def _to_iso(dt: datetime | None) -> str | None:
@@ -58,16 +57,14 @@ def _content_html(entry: feedparser.FeedParserDict) -> str:
     return _str_or_empty(entry.get("summary"))
 
 
-def parse_entry(entry: feedparser.FeedParserDict, *, base_url: str | None = None) -> ParsedEntry:
-    url = _optional_str(entry.get("link"))
-    html_base = url or base_url
-    summary = absolutize_html_urls(_str_or_empty(entry.get("summary")), html_base)
+def parse_entry(entry: feedparser.FeedParserDict) -> ParsedEntry:
+    summary = _str_or_empty(entry.get("summary"))
     return ParsedEntry(
         guid=_make_guid(entry),
         title=_str_or_empty(entry.get("title")).strip(),
-        url=url,
+        url=_optional_str(entry.get("link")),
         author=_optional_str(entry.get("author")),
-        content=absolutize_html_urls(_content_html(entry), html_base),
+        content=_content_html(entry),
         summary=summary,
         published_at=_to_iso(
             _parse_struct_time(entry.get("published_parsed"))
@@ -77,11 +74,14 @@ def parse_entry(entry: feedparser.FeedParserDict, *, base_url: str | None = None
 
 
 def parse_feed(text: str, *, fallback_title: str, base_url: str | None = None) -> ParsedFeed:
-    parsed = feedparser.parse(text)
+    # Passing content-location lets feedparser resolve relative URLs in entry
+    # HTML against the feed URL via its built-in sanitizer.
+    response_headers = {"content-location": base_url} if base_url else None
+    parsed = feedparser.parse(text, response_headers=response_headers)
     title = (_optional_str(parsed.feed.get("title")) or fallback_title).strip()
     site_url = _optional_str(parsed.feed.get("link"))
     return ParsedFeed(
         title=title,
         site_url=site_url,
-        entries=[parse_entry(entry, base_url=site_url or base_url) for entry in parsed.entries],
+        entries=[parse_entry(entry) for entry in parsed.entries],
     )
