@@ -111,9 +111,7 @@ class FeedManagementUseCases:
             if folder_id == "__none":
                 new_folder: str | None = None
             else:
-                new_folder = self._to_application_error(
-                    lambda: FolderId.from_raw(folder_id)
-                ).value
+                new_folder = self._to_application_error(lambda: FolderId.from_raw(folder_id)).value
             repo.update_feed_folder(self.conn, feed_id, new_folder)
             events.append(DomainEvent.FEED_FOLDER_CHANGED)
         return OperationResult(tuple(events))
