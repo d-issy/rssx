@@ -30,7 +30,7 @@ def probe_feed_title(url: str) -> tuple[str, str | None]:
     return parsed.title, parsed.site_url
 
 
-def fetch_feed(conn: sqlite3.Connection, feed_id: int, cfg: FetchConfig | None = None) -> int:
+def fetch_feed(conn: sqlite3.Connection, feed_id: str, cfg: FetchConfig | None = None) -> int:
     cfg = cfg or FetchConfig()
     feed = repo.get_feed_fetch_state(conn, feed_id)
     if feed is None:
@@ -107,7 +107,7 @@ def fetch_all(conn: sqlite3.Connection, cfg: FetchConfig | None = None) -> int:
 
 
 def fetch_feed_ids(
-    conn: sqlite3.Connection, feed_ids: Iterable[int], cfg: FetchConfig | None = None
+    conn: sqlite3.Connection, feed_ids: Iterable[str], cfg: FetchConfig | None = None
 ) -> int:
     total = 0
     for feed_id in feed_ids:

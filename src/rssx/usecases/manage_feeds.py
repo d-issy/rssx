@@ -33,7 +33,7 @@ class FeedManagementUseCases:
         fetch_cfg: FetchConfig,
         *,
         probe_feed_title_fn: Callable[[str], tuple[str, str | None]] = probe_feed_title,
-        fetch_feed_fn: Callable[[sqlite3.Connection, int, FetchConfig], object] = fetch_feed,
+        fetch_feed_fn: Callable[[sqlite3.Connection, str, FetchConfig], object] = fetch_feed,
     ) -> None:
         self.conn = conn
         self.fetch_cfg = fetch_cfg
@@ -92,13 +92,13 @@ class FeedManagementUseCases:
             feed_id=feed_id,
         )
 
-    def delete_feed(self, feed_id: int) -> OperationResult:
+    def delete_feed(self, feed_id: str) -> OperationResult:
         repo.delete_feed(self.conn, feed_id)
         return OperationResult((DomainEvent.COUNTS_CHANGED, DomainEvent.FEED_FOLDER_CHANGED))
 
     def edit_feed(
         self,
-        feed_id: int,
+        feed_id: str,
         *,
         title: str | None = None,
         folder_id: str = "__unchanged",
@@ -107,7 +107,7 @@ class FeedManagementUseCases:
         if title is not None:
             repo.update_feed_title(self.conn, feed_id, title)
         if folder_id != "__unchanged":
-            new_folder = None if folder_id == "__none" else int(folder_id)
+            new_folder = None if folder_id == "__none" else folder_id
             repo.update_feed_folder(self.conn, feed_id, new_folder)
             events.append(DomainEvent.FEED_FOLDER_CHANGED)
         return OperationResult(tuple(events))

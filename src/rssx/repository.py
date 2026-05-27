@@ -1,5 +1,7 @@
 import sqlite3
 
+from ulid import ULID
+
 from rssx.dto import (
     EntryDetail,
     EntryListItem,
@@ -111,9 +113,9 @@ def build_sidebar_tree(
 ) -> tuple[list[FolderTreeNode], list[FeedListItem], int]:
     by_id = {f.id: FolderTreeNode(id=f.id, name=f.name, parent_id=f.parent_id) for f in folders}
 
-    def in_cycle(nid: int) -> bool:
-        seen: set[int] = set()
-        cur: int | None = nid
+    def in_cycle(nid: str) -> bool:
+        seen: set[str] = set()
+        cur: str | None = nid
         while cur is not None and cur in by_id:
             if cur in seen:
                 return True
@@ -172,7 +174,7 @@ def list_feeds_filtered(
     conn: sqlite3.Connection,
     *,
     query: str = "",
-    folder_ids: list[int] | None = None,
+    folder_ids: list[str] | None = None,
     include_orphan: bool = True,
 ) -> list[FeedListItem]:
     where: list[str] = []
@@ -237,7 +239,7 @@ def list_folders_with_counts(conn: sqlite3.Connection) -> list[FolderWithCount]:
     return [_folder_with_count(r) for r in rows]
 
 
-def get_folder(conn: sqlite3.Connection, folder_id: int) -> FolderWithCount | None:
+def get_folder(conn: sqlite3.Connection, folder_id: str) -> FolderWithCount | None:
     row = conn.execute(
         """
         SELECT fo.id, fo.name, fo.parent_id, fo.position,
@@ -249,7 +251,7 @@ def get_folder(conn: sqlite3.Connection, folder_id: int) -> FolderWithCount | No
     return _folder_with_count(row) if row else None
 
 
-def get_feed(conn: sqlite3.Connection, feed_id: int) -> FeedListItem | None:
+def get_feed(conn: sqlite3.Connection, feed_id: str) -> FeedListItem | None:
     row = conn.execute(
         """
         SELECT f.id, f.url, f.title, f.site_url, f.folder_id, f.last_fetched_at,
@@ -271,7 +273,7 @@ def get_feed_by_url(conn: sqlite3.Connection, url: str) -> FeedRef | None:
     return FeedRef(id=row["id"], title=row["title"]) if row else None
 
 
-def get_feed_fetch_state(conn: sqlite3.Connection, feed_id: int) -> FeedFetchState | None:
+def get_feed_fetch_state(conn: sqlite3.Connection, feed_id: str) -> FeedFetchState | None:
     row = conn.execute(
         "SELECT id, url, etag, last_modified FROM feeds WHERE id = ?",
         (feed_id,),
@@ -286,7 +288,7 @@ def get_feed_fetch_state(conn: sqlite3.Connection, feed_id: int) -> FeedFetchSta
     )
 
 
-def descendant_folder_ids(conn: sqlite3.Connection, folder_id: int) -> list[int]:
+def descendant_folder_ids(conn: sqlite3.Connection, folder_id: str) -> list[str]:
     ids = [folder_id]
     stack = [folder_id]
     while stack:
@@ -312,8 +314,8 @@ def list_entries(
     conn: sqlite3.Connection,
     *,
     scope: str = "all",
-    folder_id: int | None = None,
-    feed_id: int | None = None,
+    folder_id: str | None = None,
+    feed_id: str | None = None,
     unread_only: bool = True,
     limit: int = 100,
     offset: int = 0,
@@ -353,7 +355,7 @@ def list_entries(
     return [_entry_list_item(r) for r in rows]
 
 
-def get_entry(conn: sqlite3.Connection, entry_id: int) -> EntryDetail | None:
+def get_entry(conn: sqlite3.Connection, entry_id: str) -> EntryDetail | None:
     row = conn.execute(
         """
         SELECT e.*, f.title AS feed_title
@@ -365,7 +367,7 @@ def get_entry(conn: sqlite3.Connection, entry_id: int) -> EntryDetail | None:
     return _entry_detail(row) if row else None
 
 
-def mark_read(conn: sqlite3.Connection, entry_id: int, value: bool) -> None:
+def mark_read(conn: sqlite3.Connection, entry_id: str, value: bool) -> None:
     with transaction(conn):
         if value:
             conn.execute(
@@ -379,7 +381,7 @@ def mark_read(conn: sqlite3.Connection, entry_id: int, value: bool) -> None:
             )
 
 
-def toggle_star(conn: sqlite3.Connection, entry_id: int) -> bool:
+def toggle_star(conn: sqlite3.Connection, entry_id: str) -> bool:
     row = conn.execute("SELECT is_starred FROM entries WHERE id = ?", (entry_id,)).fetchone()
     if not row:
         return False
@@ -394,28 +396,28 @@ def toggle_star(conn: sqlite3.Connection, entry_id: int) -> bool:
     return bool(new_val)
 
 
-def add_folder(conn: sqlite3.Connection, name: str, parent_id: int | None = None) -> int:
+def add_folder(conn: sqlite3.Connection, name: str, parent_id: str | None = None) -> str:
+    folder_id = str(ULID())
     with transaction(conn):
-        cur = conn.execute(
-            "INSERT INTO folders (name, parent_id) VALUES (?, ?)",
-            (name.strip(), parent_id),
+        conn.execute(
+            "INSERT INTO folders (id, name, parent_id) VALUES (?, ?, ?)",
+            (folder_id, name.strip(), parent_id),
         )
-    assert cur.lastrowid is not None
-    return cur.lastrowid
+    return folder_id
 
 
-def delete_folder(conn: sqlite3.Connection, folder_id: int) -> None:
+def delete_folder(conn: sqlite3.Connection, folder_id: str) -> None:
     with transaction(conn):
         conn.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
 
 
-def delete_folder_cascade(conn: sqlite3.Connection, folder_id: int) -> None:
+def delete_folder_cascade(conn: sqlite3.Connection, folder_id: str) -> None:
     with transaction(conn):
         conn.execute("DELETE FROM feeds WHERE folder_id = ?", (folder_id,))
         conn.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
 
 
-def rename_folder(conn: sqlite3.Connection, folder_id: int, name: str) -> None:
+def rename_folder(conn: sqlite3.Connection, folder_id: str, name: str) -> None:
     with transaction(conn):
         conn.execute("UPDATE folders SET name = ? WHERE id = ?", (name.strip(), folder_id))
 
@@ -426,43 +428,44 @@ def add_feed(
     url: str,
     title: str,
     site_url: str | None,
-    folder_id: int | None,
-) -> int:
+    folder_id: str | None,
+) -> str:
+    feed_id = str(ULID())
     with transaction(conn):
-        cur = conn.execute(
+        conn.execute(
             """
-            INSERT INTO feeds (url, title, site_url, folder_id)
-            VALUES (:url, :title, :site_url, :folder_id)
+            INSERT INTO feeds (id, url, title, site_url, folder_id)
+            VALUES (:id, :url, :title, :site_url, :folder_id)
             """,
             {
+                "id": feed_id,
                 "url": url.strip(),
                 "title": title.strip(),
                 "site_url": site_url,
                 "folder_id": folder_id,
             },
         )
-    assert cur.lastrowid is not None
-    return cur.lastrowid
+    return feed_id
 
 
-def delete_feed(conn: sqlite3.Connection, feed_id: int) -> None:
+def delete_feed(conn: sqlite3.Connection, feed_id: str) -> None:
     with transaction(conn):
         conn.execute("DELETE FROM feeds WHERE id = ?", (feed_id,))
 
 
-def update_feed_title(conn: sqlite3.Connection, feed_id: int, title: str) -> None:
+def update_feed_title(conn: sqlite3.Connection, feed_id: str, title: str) -> None:
     with transaction(conn):
         conn.execute("UPDATE feeds SET title = ? WHERE id = ?", (title.strip(), feed_id))
 
 
-def update_feed_folder(conn: sqlite3.Connection, feed_id: int, folder_id: int | None) -> None:
+def update_feed_folder(conn: sqlite3.Connection, feed_id: str, folder_id: str | None) -> None:
     with transaction(conn):
         conn.execute("UPDATE feeds SET folder_id = ? WHERE id = ?", (folder_id, feed_id))
 
 
 def record_feed_fetch_failure(
     conn: sqlite3.Connection,
-    feed_id: int,
+    feed_id: str,
     *,
     error: str,
     fetched_at: str,
@@ -482,16 +485,17 @@ def record_feed_fetch_failure(
         )
 
 
-def insert_parsed_entry(conn: sqlite3.Connection, feed_id: int, entry: ParsedEntry) -> bool:
+def insert_parsed_entry(conn: sqlite3.Connection, feed_id: str, entry: ParsedEntry) -> bool:
     try:
         cur = conn.execute(
             """
             INSERT INTO entries
-                (feed_id, guid, title, url, author, content, summary, published_at)
+                (id, feed_id, guid, title, url, author, content, summary, published_at)
             VALUES
-                (:feed_id, :guid, :title, :url, :author, :content, :summary, :published_at)
+                (:id, :feed_id, :guid, :title, :url, :author, :content, :summary, :published_at)
             """,
             {
+                "id": str(ULID()),
                 "feed_id": feed_id,
                 "guid": entry.guid,
                 "title": entry.title,
@@ -509,7 +513,7 @@ def insert_parsed_entry(conn: sqlite3.Connection, feed_id: int, entry: ParsedEnt
 
 def update_feed_cache_headers(
     conn: sqlite3.Connection,
-    feed_id: int,
+    feed_id: str,
     *,
     etag: str | None,
     last_modified: str | None,
@@ -523,7 +527,7 @@ def update_feed_cache_headers(
 
 def store_fetched_entries(
     conn: sqlite3.Connection,
-    feed_id: int,
+    feed_id: str,
     entries: list[ParsedEntry],
     *,
     etag: str | None,
@@ -538,7 +542,7 @@ def store_fetched_entries(
     return new_count
 
 
-def list_recent_published_at(conn: sqlite3.Connection, feed_id: int, *, limit: int) -> list[str]:
+def list_recent_published_at(conn: sqlite3.Connection, feed_id: str, *, limit: int) -> list[str]:
     rows = conn.execute(
         "SELECT published_at FROM entries WHERE feed_id = ? AND published_at IS NOT NULL "
         "ORDER BY published_at DESC LIMIT ?",
@@ -547,7 +551,7 @@ def list_recent_published_at(conn: sqlite3.Connection, feed_id: int, *, limit: i
     return [row["published_at"] for row in rows]
 
 
-def get_consecutive_empty(conn: sqlite3.Connection, feed_id: int) -> int:
+def get_consecutive_empty(conn: sqlite3.Connection, feed_id: str) -> int:
     row = conn.execute(
         "SELECT consecutive_empty FROM feeds WHERE id = ?",
         (feed_id,),
@@ -559,7 +563,7 @@ def get_consecutive_empty(conn: sqlite3.Connection, feed_id: int) -> int:
 
 def record_feed_fetch_success(
     conn: sqlite3.Connection,
-    feed_id: int,
+    feed_id: str,
     *,
     fetched_at: str,
     next_fetch_at: str,
@@ -584,7 +588,7 @@ def record_feed_fetch_success(
         )
 
 
-def list_due_feed_ids(conn: sqlite3.Connection, *, now: str) -> list[int]:
+def list_due_feed_ids(conn: sqlite3.Connection, *, now: str) -> list[str]:
     rows = conn.execute(
         "SELECT id FROM feeds WHERE next_fetch_at IS NULL OR next_fetch_at <= ?",
         (now,),
@@ -592,7 +596,7 @@ def list_due_feed_ids(conn: sqlite3.Connection, *, now: str) -> list[int]:
     return [row["id"] for row in rows]
 
 
-def list_feed_ids(conn: sqlite3.Connection) -> list[int]:
+def list_feed_ids(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute("SELECT id FROM feeds").fetchall()
     return [row["id"] for row in rows]
 
@@ -624,7 +628,7 @@ def search_entries(conn: sqlite3.Connection, query: str, limit: int = 100) -> li
         SELECT e.id, e.feed_id, e.title, e.url, e.author, e.summary, e.published_at,
                e.is_read, e.is_starred, f.title AS feed_title
         FROM entries_fts
-        JOIN entries e ON e.id = entries_fts.rowid
+        JOIN entries e ON e.id = entries_fts.entry_id
         JOIN feeds f ON f.id = e.feed_id
         WHERE entries_fts MATCH :phrase
         ORDER BY COALESCE(e.published_at, e.fetched_at) DESC

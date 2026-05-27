@@ -5,20 +5,20 @@ from pathlib import Path
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS folders (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          TEXT    PRIMARY KEY,
     name        TEXT    NOT NULL,
-    parent_id   INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+    parent_id   TEXT    REFERENCES folders(id) ON DELETE CASCADE,
     position    INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
 
 CREATE TABLE IF NOT EXISTS feeds (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    id              TEXT    PRIMARY KEY,
     url             TEXT    NOT NULL UNIQUE,
     title           TEXT    NOT NULL,
     site_url        TEXT,
-    folder_id       INTEGER REFERENCES folders(id) ON DELETE SET NULL,
+    folder_id       TEXT    REFERENCES folders(id) ON DELETE SET NULL,
     etag            TEXT,
     last_modified   TEXT,
     last_fetched_at TEXT,
@@ -32,8 +32,8 @@ CREATE INDEX IF NOT EXISTS idx_feeds_folder ON feeds(folder_id);
 CREATE INDEX IF NOT EXISTS idx_feeds_next_fetch ON feeds(next_fetch_at);
 
 CREATE TABLE IF NOT EXISTS entries (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+    id           TEXT    PRIMARY KEY,
+    feed_id      TEXT    NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
     guid         TEXT    NOT NULL,
     title        TEXT    NOT NULL DEFAULT '',
     url          TEXT,
@@ -54,26 +54,23 @@ CREATE INDEX IF NOT EXISTS idx_entries_is_starred ON entries(is_starred);
 CREATE INDEX IF NOT EXISTS idx_entries_published ON entries(published_at DESC);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
+    entry_id UNINDEXED,
     title, content, summary,
-    content='entries',
-    content_rowid='id',
     tokenize='trigram'
 );
 
 CREATE TRIGGER IF NOT EXISTS entries_ai AFTER INSERT ON entries BEGIN
-    INSERT INTO entries_fts(rowid, title, content, summary)
+    INSERT INTO entries_fts(entry_id, title, content, summary)
     VALUES (new.id, new.title, new.content, new.summary);
 END;
 
 CREATE TRIGGER IF NOT EXISTS entries_ad AFTER DELETE ON entries BEGIN
-    INSERT INTO entries_fts(entries_fts, rowid, title, content, summary)
-    VALUES ('delete', old.id, old.title, old.content, old.summary);
+    DELETE FROM entries_fts WHERE entry_id = old.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS entries_au AFTER UPDATE ON entries BEGIN
-    INSERT INTO entries_fts(entries_fts, rowid, title, content, summary)
-    VALUES ('delete', old.id, old.title, old.content, old.summary);
-    INSERT INTO entries_fts(rowid, title, content, summary)
+    DELETE FROM entries_fts WHERE entry_id = old.id;
+    INSERT INTO entries_fts(entry_id, title, content, summary)
     VALUES (new.id, new.title, new.content, new.summary);
 END;
 """
@@ -91,28 +88,6 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
-    _ensure_fts_trigram(conn)
-
-
-def _ensure_fts_trigram(conn: sqlite3.Connection) -> None:
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='entries_fts'"
-    ).fetchone()
-    if not row or "tokenize='trigram'" in (row[0] or ""):
-        return
-    with transaction(conn):
-        conn.execute("DROP TABLE entries_fts")
-        conn.execute(
-            """
-            CREATE VIRTUAL TABLE entries_fts USING fts5(
-                title, content, summary,
-                content='entries',
-                content_rowid='id',
-                tokenize='trigram'
-            )
-            """
-        )
-        conn.execute("INSERT INTO entries_fts(entries_fts) VALUES('rebuild')")
 
 
 @contextmanager

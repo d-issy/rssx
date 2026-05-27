@@ -31,8 +31,8 @@ BASE_DIR = Path(__file__).resolve().parent
 @dataclass(frozen=True)
 class IndexScope:
     scope: str
-    current_folder_id: int | None
-    current_feed_id: int | None
+    current_folder_id: str | None
+    current_feed_id: str | None
     unread_only: bool
     query: str
 
@@ -102,8 +102,8 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     def index(
         request: Request,
         scope: str = "all",
-        folder: int | None = None,
-        feed: int | None = None,
+        folder: str | None = None,
+        feed: str | None = None,
         unread: int = 1,
     ):
         entries = repo.list_entries(
@@ -126,14 +126,14 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         )
 
     @app.get("/entries/{entry_id}", response_class=HTMLResponse)
-    def entry_body(request: Request, entry_id: int):
+    def entry_body(request: Request, entry_id: str):
         entry = repo.get_entry(conn, entry_id)
         if not entry:
             raise HTTPException(404)
         return templates.TemplateResponse(request, "_entry_body.html", {"entry": entry})
 
     @app.post("/entries/{entry_id}/read", response_class=HTMLResponse)
-    def entry_read(request: Request, entry_id: int, value: int = 1):
+    def entry_read(request: Request, entry_id: str, value: int = 1):
         repo.mark_read(conn, entry_id, bool(value))
         entry = repo.get_entry(conn, entry_id)
         if not entry:
@@ -143,7 +143,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return resp
 
     @app.post("/entries/{entry_id}/star", response_class=HTMLResponse)
-    def entry_star(request: Request, entry_id: int):
+    def entry_star(request: Request, entry_id: str):
         repo.toggle_star(conn, entry_id)
         entry = repo.get_entry(conn, entry_id)
         if not entry:
@@ -156,8 +156,8 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     def sidebar(
         request: Request,
         scope: str = "all",
-        folder: int | None = None,
-        feed: int | None = None,
+        folder: str | None = None,
+        feed: str | None = None,
     ):
         folders = repo.list_folders(conn)
         feeds = repo.list_feeds(conn)
@@ -199,7 +199,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return RedirectResponse("/", status_code=303)
 
     @app.post("/refresh/feed/{feed_id}")
-    def refresh_one(feed_id: int):
+    def refresh_one(feed_id: str):
         fetch_feed(conn, feed_id, fetch_cfg)
         return RedirectResponse("/", status_code=303)
 
@@ -210,7 +210,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
             {"feeds": feeds, "folders": folders},
         )
 
-    def _render_feed_row(request: Request, feed_id: int):
+    def _render_feed_row(request: Request, feed_id: str):
         feed = repo.get_feed(conn, feed_id)
         if not feed:
             raise HTTPException(404)
@@ -220,7 +220,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
             {"feed": feed, "folders": repo.list_folders(conn)},
         )
 
-    def _render_folder_row(request: Request, folder_id: int):
+    def _render_folder_row(request: Request, folder_id: str):
         folder = repo.get_folder(conn, folder_id)
         if not folder:
             raise HTTPException(404)
@@ -260,16 +260,13 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         if folders is None:
             feeds = repo.list_feeds_filtered(conn, query=q_)
         else:
-            folder_ids: list[int] = []
+            folder_ids: list[str] = []
             include_orphan = False
             for v in folders:
                 if v == "__orphan":
                     include_orphan = True
-                else:
-                    try:
-                        folder_ids.append(int(v))
-                    except ValueError:
-                        continue
+                elif v:
+                    folder_ids.append(v)
             feeds = repo.list_feeds_filtered(
                 conn, query=q_, folder_ids=folder_ids, include_orphan=include_orphan
             )
@@ -305,7 +302,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     @app.post("/folders/{folder_id}/rename", response_class=HTMLResponse)
     def folder_rename(
         request: Request,
-        folder_id: int,
+        folder_id: str,
         name: Annotated[str, Form()],
     ):
         try:
@@ -321,7 +318,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     @app.post("/folders/{folder_id}/delete")
     def folder_delete(
         request: Request,
-        folder_id: int,
+        folder_id: str,
         mode: Annotated[str, Form()] = "detach",
     ):
         result = folder_usecases.delete_folder(folder_id, mode)
@@ -355,7 +352,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return RedirectResponse("/manage", status_code=303)
 
     @app.post("/feeds/{feed_id}/delete")
-    def feed_delete(request: Request, feed_id: int):
+    def feed_delete(request: Request, feed_id: str):
         result = feed_usecases.delete_feed(feed_id)
         if is_htmx(request):
             resp = HTMLResponse("")
@@ -378,7 +375,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     @app.post("/feeds/{feed_id}/edit", response_class=HTMLResponse)
     def feed_edit(
         request: Request,
-        feed_id: int,
+        feed_id: str,
         title: Annotated[str | None, Form()] = None,
         folder_id: Annotated[str, Form()] = "__unchanged",
     ):
