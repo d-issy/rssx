@@ -16,7 +16,7 @@ def fetch_cfg() -> FetchConfig:
 
 def test_create_feed_with_new_folder_is_unit_testable_without_http(db_path: Path) -> None:
     conn = connect(db_path)
-    fetched: list[int] = []
+    fetched: list[str] = []
     try:
         init_schema(conn)
         service = FeedManagementUseCases(
@@ -32,7 +32,7 @@ def test_create_feed_with_new_folder_is_unit_testable_without_http(db_path: Path
             new_folder_name="News",
         )
 
-        assert result.feed_id > 0
+        assert result.feed_id
         assert fetched == [result.feed_id]
         assert result.events == (
             DomainEvent.FEED_ADDED,

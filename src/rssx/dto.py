@@ -4,28 +4,28 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class FolderRow:
-    id: int
+    id: str
     name: str
-    parent_id: int | None
+    parent_id: str | None
     position: int
 
 
 @dataclass(frozen=True)
 class FolderWithCount:
-    id: int
+    id: str
     name: str
-    parent_id: int | None
+    parent_id: str | None
     position: int
     feed_count: int
 
 
 @dataclass(frozen=True)
 class FeedListItem:
-    id: int
+    id: str
     url: str
     title: str
     site_url: str | None
-    folder_id: int | None
+    folder_id: str | None
     last_fetched_at: datetime | None
     next_fetch_at: datetime | None
     last_error: str | None
@@ -34,14 +34,14 @@ class FeedListItem:
 
 @dataclass(frozen=True)
 class FeedRef:
-    id: int
+    id: str
     title: str
 
 
 @dataclass(frozen=True)
 class EntryListItem:
-    id: int
-    feed_id: int
+    id: str
+    feed_id: str
     title: str
     url: str | None
     author: str | None
@@ -54,8 +54,8 @@ class EntryListItem:
 
 @dataclass(frozen=True)
 class EntryDetail:
-    id: int
-    feed_id: int
+    id: str
+    feed_id: str
     guid: str
     title: str
     url: str | None
@@ -73,9 +73,9 @@ class EntryDetail:
 
 @dataclass
 class FolderTreeNode:
-    id: int
+    id: str
     name: str
-    parent_id: int | None
+    parent_id: str | None
     children: list[FolderTreeNode] = field(default_factory=list)
     feeds: list[FeedListItem] = field(default_factory=list)
     unread_count: int = 0
@@ -83,7 +83,7 @@ class FolderTreeNode:
 
 @dataclass(frozen=True)
 class FeedFetchState:
-    id: int
+    id: str
     url: str
     etag: str | None
     last_modified: str | None

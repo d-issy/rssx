@@ -4,11 +4,11 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class Feed:
-    id: int
+    id: str
     url: str
     title: str
     site_url: str | None
-    folder_id: int | None
+    folder_id: str | None
     etag: str | None
     last_modified: str | None
     last_fetched_at: datetime | None

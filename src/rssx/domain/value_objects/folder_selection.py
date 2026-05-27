@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 
+from rssx.domain.errors import DomainError
+from rssx.domain.value_objects.folder_id import FolderId
 from rssx.domain.value_objects.folder_name import FolderName
 
 
 @dataclass(frozen=True)
 class FolderSelection:
-    folder_id: int | None = None
+    folder_id: FolderId | None = None
     new_folder_name: FolderName | None = None
 
     @classmethod
@@ -24,6 +26,6 @@ class FolderSelection:
         if not folder_id:
             return cls()
         try:
-            return cls(folder_id=int(folder_id))
-        except ValueError:
+            return cls(folder_id=FolderId.from_raw(folder_id))
+        except DomainError:
             return cls()

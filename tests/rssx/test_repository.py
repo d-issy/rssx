@@ -1,10 +1,12 @@
 from pathlib import Path
 
+from ulid import ULID
+
 from rssx import repository as repo
 from rssx.db import connect, init_schema
 
 
-def setup_content(db_path: Path) -> tuple[int, int, int, int, int]:
+def setup_content(db_path: Path) -> tuple[str, str, str, str, str]:
     conn = connect(db_path)
     try:
         init_schema(conn)
@@ -33,14 +35,46 @@ def setup_content(db_path: Path) -> tuple[int, int, int, int, int]:
         )
         conn.executemany(
             """
-            INSERT INTO entries (feed_id, guid, title, summary, published_at, is_read)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO entries (id, feed_id, guid, title, summary, published_at, is_read)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (parent_feed_id, "p1", "Parent unread", "alpha", "2024-01-15T10:00:00+00:00", 0),
-                (parent_feed_id, "p2", "Parent read", "beta", "2024-01-14T10:00:00+00:00", 1),
-                (child_feed_id, "c1", "Child unread", "gamma", "2024-01-16T10:00:00+00:00", 0),
-                (orphan_feed_id, "o1", "Orphan unread", "delta", "2024-01-17T10:00:00+00:00", 0),
+                (
+                    str(ULID()),
+                    parent_feed_id,
+                    "p1",
+                    "Parent unread",
+                    "alpha",
+                    "2024-01-15T10:00:00+00:00",
+                    0,
+                ),
+                (
+                    str(ULID()),
+                    parent_feed_id,
+                    "p2",
+                    "Parent read",
+                    "beta",
+                    "2024-01-14T10:00:00+00:00",
+                    1,
+                ),
+                (
+                    str(ULID()),
+                    child_feed_id,
+                    "c1",
+                    "Child unread",
+                    "gamma",
+                    "2024-01-16T10:00:00+00:00",
+                    0,
+                ),
+                (
+                    str(ULID()),
+                    orphan_feed_id,
+                    "o1",
+                    "Orphan unread",
+                    "delta",
+                    "2024-01-17T10:00:00+00:00",
+                    0,
+                ),
             ],
         )
         return parent_id, child_id, parent_feed_id, child_feed_id, orphan_feed_id

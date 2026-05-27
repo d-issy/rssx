@@ -4,8 +4,8 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class Entry:
-    id: int
-    feed_id: int
+    id: str
+    feed_id: str
     guid: str
     title: str
     url: str | None

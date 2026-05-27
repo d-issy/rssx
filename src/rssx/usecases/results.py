@@ -17,4 +17,4 @@ class OperationResult:
 
 @dataclass(frozen=True)
 class FeedCreateResult(OperationResult):
-    feed_id: int = 0
+    feed_id: str = ""

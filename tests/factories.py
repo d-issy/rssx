@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from ulid import ULID
+
 from rssx import repository as repo
 from rssx.db import connect, init_schema
 
@@ -10,7 +12,7 @@ def seed_feed(
     folder_name: str | None = "Tech",
     url: str = "https://example.com/feed.xml",
     title: str = "Example Feed",
-) -> tuple[int | None, int]:
+) -> tuple[str | None, str]:
     conn = connect(db_path)
     try:
         init_schema(conn)
@@ -27,7 +29,7 @@ def seed_feed(
         conn.close()
 
 
-def seed_entry(db_path: Path) -> int:
+def seed_entry(db_path: Path) -> str:
     conn = connect(db_path)
     try:
         init_schema(conn)
@@ -38,12 +40,14 @@ def seed_entry(db_path: Path) -> int:
             site_url=None,
             folder_id=None,
         )
-        cur = conn.execute(
+        entry_id = str(ULID())
+        conn.execute(
             """
-            INSERT INTO entries (feed_id, guid, title, url, summary, published_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO entries (id, feed_id, guid, title, url, summary, published_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                entry_id,
                 feed_id,
                 "entry-1",
                 "Entry title",
@@ -52,7 +56,6 @@ def seed_entry(db_path: Path) -> int:
                 "2024-01-15T09:30:00+00:00",
             ),
         )
-        assert cur.lastrowid is not None
-        return cur.lastrowid
+        return entry_id
     finally:
         conn.close()

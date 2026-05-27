@@ -17,12 +17,12 @@ class FolderManagementUseCases:
         repo.add_folder(self.conn, folder_name.value, None)
         return OperationResult((DomainEvent.COUNTS_CHANGED,))
 
-    def rename_folder(self, folder_id: int, name: str) -> OperationResult:
+    def rename_folder(self, folder_id: str, name: str) -> OperationResult:
         folder_name = self._to_application_error(lambda: FolderName.from_raw(name))
         repo.rename_folder(self.conn, folder_id, folder_name.value)
         return OperationResult((DomainEvent.COUNTS_CHANGED,))
 
-    def delete_folder(self, folder_id: int, mode: str) -> OperationResult:
+    def delete_folder(self, folder_id: str, mode: str) -> OperationResult:
         if mode == "cascade":
             repo.delete_folder_cascade(self.conn, folder_id)
         else:
