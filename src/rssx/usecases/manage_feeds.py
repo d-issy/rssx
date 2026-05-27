@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from rssx import repository as repo
 from rssx.domain.errors import DomainError
 from rssx.domain.events import DomainEvent
-from rssx.domain.value_objects import FeedUrl, FolderSelection
+from rssx.domain.value_objects import FeedUrl, FolderId, FolderSelection
 from rssx.lib.feeds.scheduling import FetchConfig
 from rssx.usecases.feed_sync import fetch_feed, probe_feed_title
 from rssx.usecases.results import ApplicationError, FeedCreateResult, OperationResult
@@ -60,12 +60,13 @@ class FeedManagementUseCases:
             raise ApplicationError(f"このURLは既に登録されています: {existing.title}")
 
         try:
+            selected = data.folder_selection.folder_id
             feed_id = repo.add_feed(
                 self.conn,
                 url=data.url.value,
                 title=data.normalized_title,
                 site_url=data.site_url,
-                folder_id=data.folder_selection.folder_id,
+                folder_id=selected.value if selected else None,
             )
         except sqlite3.IntegrityError as e:
             raise ApplicationError("このURLは既に登録されています") from e
@@ -107,7 +108,12 @@ class FeedManagementUseCases:
         if title is not None:
             repo.update_feed_title(self.conn, feed_id, title)
         if folder_id != "__unchanged":
-            new_folder = None if folder_id == "__none" else folder_id
+            if folder_id == "__none":
+                new_folder: str | None = None
+            else:
+                new_folder = self._to_application_error(
+                    lambda: FolderId.from_raw(folder_id)
+                ).value
             repo.update_feed_folder(self.conn, feed_id, new_folder)
             events.append(DomainEvent.FEED_FOLDER_CHANGED)
         return OperationResult(tuple(events))

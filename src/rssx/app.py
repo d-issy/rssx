@@ -13,6 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from . import repository as repo
 from .config import Config
 from .db import connect, init_schema
+from .domain.errors import DomainError
+from .domain.value_objects import FolderId
 from .dto import EntryListItem
 from .lib.env import is_dev_mode
 from .lib.feeds.scheduling import FetchConfig
@@ -265,8 +267,11 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
             for v in folders:
                 if v == "__orphan":
                     include_orphan = True
-                elif v:
-                    folder_ids.append(v)
+                    continue
+                try:
+                    folder_ids.append(FolderId.from_raw(v).value)
+                except DomainError:
+                    continue
             feeds = repo.list_feeds_filtered(
                 conn, query=q_, folder_ids=folder_ids, include_orphan=include_orphan
             )
