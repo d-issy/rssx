@@ -3,6 +3,7 @@ import { isOpen as isManageOpen } from "./dialogs/manage";
 import { isHelpOpen, toggleHelp } from "./dialogs/help";
 import {
   getSelected,
+  markCurrentScopeRead,
   openOriginal,
   selectFirst,
   selectLast,
@@ -61,6 +62,8 @@ function handleEntryShortcut(ev: KeyboardEvent): boolean {
     case "m":
       if (current) toggleRead(current);
       return current != null;
+    case "A":
+      return ev.shiftKey ? markCurrentScopeRead() : false;
     case "f":
       if (current) toggleStar(current);
       return current != null;

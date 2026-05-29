@@ -125,6 +125,26 @@ def test_list_feeds_filtered_can_select_only_orphans(db_path: Path) -> None:
     assert [row.id for row in rows] == [orphan_feed_id]
 
 
+def test_mark_scope_read_marks_folder_descendants(db_path: Path) -> None:
+    parent_id, *_ = setup_content(db_path)
+    conn = connect(db_path)
+    try:
+        assert repo.mark_scope_read(conn, scope="folder", folder_id=parent_id) == 2
+        assert repo.get_unread_total(conn) == 1
+        rows = conn.execute(
+            """
+            SELECT title, read_at FROM entries
+            WHERE title IN ('Parent unread', 'Child unread')
+            ORDER BY title
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert [row["title"] for row in rows] == ["Child unread", "Parent unread"]
+    assert all(row["read_at"] is not None for row in rows)
+
+
 def test_mark_read_and_toggle_star_update_entry_state(db_path: Path) -> None:
     setup_content(db_path)
     conn = connect(db_path)

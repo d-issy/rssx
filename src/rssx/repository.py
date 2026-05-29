@@ -1,4 +1,5 @@
 import sqlite3
+from typing import Literal
 
 from ulid import ULID
 
@@ -18,6 +19,8 @@ from rssx.lib.time import parse_stored_datetime
 from .db import transaction
 
 SqlParam = str | int | float | bytes | None
+EntryScope = Literal["all", "starred", "orphan", "folder", "feed"]
+ReadScope = Literal["folder", "feed"]
 
 
 def _folder_row(row: sqlite3.Row) -> FolderRow:
@@ -313,7 +316,7 @@ def get_starred_total(conn: sqlite3.Connection) -> int:
 def list_entries(
     conn: sqlite3.Connection,
     *,
-    scope: str = "all",
+    scope: EntryScope = "all",
     folder_id: str | None = None,
     feed_id: str | None = None,
     unread_only: bool = True,
@@ -379,6 +382,40 @@ def mark_read(conn: sqlite3.Connection, entry_id: str, value: bool) -> None:
                 "UPDATE entries SET is_read = 0, read_at = NULL WHERE id = ?",
                 (entry_id,),
             )
+
+
+def mark_scope_read(
+    conn: sqlite3.Connection,
+    *,
+    scope: ReadScope,
+    folder_id: str | None = None,
+    feed_id: str | None = None,
+) -> int:
+    where = ["is_read = 0"]
+    params: list[SqlParam] = []
+
+    if scope == "feed":
+        if feed_id is None:
+            return 0
+        where.append("feed_id = ?")
+        params.append(feed_id)
+    elif scope == "folder":
+        if folder_id is None:
+            return 0
+        ids = descendant_folder_ids(conn, folder_id)
+        if not ids:
+            return 0
+        placeholders = ",".join("?" for _ in ids)
+        where.append(f"feed_id IN (SELECT id FROM feeds WHERE folder_id IN ({placeholders}))")
+        params.extend(ids)
+
+    with transaction(conn):
+        cur = conn.execute(
+            "UPDATE entries SET is_read = 1, read_at = datetime('now') "
+            f"WHERE {' AND '.join(where)}",
+            params,
+        )
+    return max(cur.rowcount, 0)
 
 
 def toggle_star(conn: sqlite3.Connection, entry_id: str) -> bool:

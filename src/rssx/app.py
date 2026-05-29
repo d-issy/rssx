@@ -3,17 +3,18 @@ import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import repository as repo
 from .config import Config
 from .db import connect, init_schema
 from .domain.errors import DomainError
+from .domain.events import DomainEvent
 from .domain.value_objects import FolderId
 from .dto import EntryListItem
 from .lib.env import is_dev_mode
@@ -29,10 +30,12 @@ log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 
+IndexRenderScope = Literal["all", "starred", "orphan", "folder", "feed", "search"]
+
 
 @dataclass(frozen=True)
 class IndexScope:
-    scope: str
+    scope: IndexRenderScope
     current_folder_id: str | None
     current_feed_id: str | None
     unread_only: bool
@@ -103,7 +106,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     @app.get("/", response_class=HTMLResponse)
     def index(
         request: Request,
-        scope: str = "all",
+        scope: Annotated[repo.EntryScope, Query()] = "all",
         folder: str | None = None,
         feed: str | None = None,
         unread: int = 1,
@@ -154,10 +157,25 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
 
+    @app.post("/entries/read-scope")
+    def entries_read_scope(
+        scope: Annotated[repo.ReadScope, Query()],
+        folder: Annotated[str | None, Query()] = None,
+        feed: Annotated[str | None, Query()] = None,
+    ):
+        if scope == "folder" and folder is None:
+            raise HTTPException(400)
+        if scope == "feed" and feed is None:
+            raise HTTPException(400)
+        repo.mark_scope_read(conn, scope=scope, folder_id=folder, feed_id=feed)
+        resp = Response(status_code=204)
+        add_trigger(resp, DomainEvent.COUNTS_CHANGED)
+        return resp
+
     @app.get("/sidebar", response_class=HTMLResponse)
     def sidebar(
         request: Request,
-        scope: str = "all",
+        scope: Annotated[IndexRenderScope, Query()] = "all",
         folder: str | None = None,
         feed: str | None = None,
     ):

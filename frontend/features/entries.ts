@@ -1,7 +1,7 @@
 import { parseFragment } from "../lib/dom";
 import { DomainEvent, dispatch } from "../lib/events";
 
-const READ_DELAY_MS = 2000;
+const READ_DELAY_MS = 1000;
 
 let selectedIndex = -1;
 let autoReadTimer: ReturnType<typeof setTimeout> | null = null;
@@ -94,6 +94,34 @@ export function toggleExpand(entryEl: HTMLElement): void {
 
 export function toggleRead(entryEl: HTMLElement): void {
   void markRead(entryEl, !entryEl.classList.contains("read"));
+}
+
+function currentScopeReadUrl(): URL | null {
+  const current = new URLSearchParams(location.search);
+  const scope = current.get("scope") || "all";
+  if (scope !== "feed" && scope !== "folder") return null;
+
+  // The query param name matches the scope name ("feed" / "folder").
+  const target = current.get(scope);
+  if (!target) return null;
+
+  const url = new URL("/entries/read-scope", location.origin);
+  url.searchParams.set("scope", scope);
+  url.searchParams.set(scope, target);
+  return url;
+}
+
+// Returns whether the current scope supports a bulk mark-read so the caller
+// (keyboard handler) can decide if it actually handled the keypress.
+export function markCurrentScopeRead(): boolean {
+  const url = currentScopeReadUrl();
+  if (!url) return false;
+
+  void (async () => {
+    const res = await fetch(url, { method: "POST" });
+    if (res.ok) location.reload();
+  })();
+  return true;
 }
 
 export async function toggleStar(entryEl: HTMLElement): Promise<void> {
