@@ -2,8 +2,9 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -30,7 +31,14 @@ log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 
-IndexRenderScope = Literal["all", "starred", "orphan", "folder", "feed", "search"]
+
+class IndexRenderScope(StrEnum):
+    ALL = "all"
+    STARRED = "starred"
+    ORPHAN = "orphan"
+    FOLDER = "folder"
+    FEED = "feed"
+    SEARCH = "search"
 
 
 @dataclass(frozen=True)
@@ -106,7 +114,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     @app.get("/", response_class=HTMLResponse)
     def index(
         request: Request,
-        scope: Annotated[repo.EntryScope, Query()] = "all",
+        scope: Annotated[repo.EntryScope, Query()] = repo.EntryScope.ALL,
         folder: str | None = None,
         feed: str | None = None,
         unread: int = 1,
@@ -121,7 +129,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return render_index(
             request,
             IndexScope(
-                scope=scope,
+                scope=IndexRenderScope(scope),
                 current_folder_id=folder,
                 current_feed_id=feed,
                 unread_only=bool(unread),
@@ -138,7 +146,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return templates.TemplateResponse(request, "_entry_body.html", {"entry": entry})
 
     @app.post("/entries/{entry_id}/read", response_class=HTMLResponse)
-    def entry_read(request: Request, entry_id: str, value: int = 1):
+    def entry_read(request: Request, entry_id: str, value: Annotated[int, Query()] = 1):
         repo.mark_read(conn, entry_id, bool(value))
         entry = repo.get_entry(conn, entry_id)
         if not entry:
@@ -157,15 +165,15 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         resp.headers["HX-Trigger"] = "rssx:counts-changed"
         return resp
 
-    @app.post("/entries/read-scope")
-    def entries_read_scope(
+    @app.post("/entries/read-all")
+    def entries_read_all(
         scope: Annotated[repo.ReadScope, Query()],
         folder: Annotated[str | None, Query()] = None,
         feed: Annotated[str | None, Query()] = None,
     ):
-        if scope == "folder" and folder is None:
+        if scope == repo.ReadScope.FOLDER and folder is None:
             raise HTTPException(400)
-        if scope == "feed" and feed is None:
+        if scope == repo.ReadScope.FEED and feed is None:
             raise HTTPException(400)
         repo.mark_scope_read(conn, scope=scope, folder_id=folder, feed_id=feed)
         resp = Response(status_code=204)
@@ -175,7 +183,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
     @app.get("/sidebar", response_class=HTMLResponse)
     def sidebar(
         request: Request,
-        scope: Annotated[IndexRenderScope, Query()] = "all",
+        scope: Annotated[IndexRenderScope, Query()] = IndexRenderScope.ALL,
         folder: str | None = None,
         feed: str | None = None,
     ):
@@ -204,7 +212,7 @@ def create_app(config: Config | None = None, *, run_startup_fetch: bool = True) 
         return render_index(
             request,
             IndexScope(
-                scope="search",
+                scope=IndexRenderScope.SEARCH,
                 current_folder_id=None,
                 current_feed_id=None,
                 unread_only=False,

@@ -44,9 +44,11 @@ function bindFolderToggles(root: ParentNode): void {
 }
 
 async function refreshSidebar(): Promise<void> {
+  const url = new URL("/sidebar", location.origin);
   const params = new URLSearchParams(window.location.search);
   params.delete("unread");
-  const res = await fetch(`/sidebar?${params.toString()}`);
+  params.forEach((value, key) => url.searchParams.append(key, value));
+  const res = await fetch(url);
   const html = await res.text();
   const next = parseFragment<HTMLElement>(html);
   const cur = document.getElementById("sidebar");

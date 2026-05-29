@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Literal
+from enum import StrEnum
 
 from ulid import ULID
 
@@ -19,8 +19,19 @@ from rssx.lib.time import parse_stored_datetime
 from .db import transaction
 
 SqlParam = str | int | float | bytes | None
-EntryScope = Literal["all", "starred", "orphan", "folder", "feed"]
-ReadScope = Literal["folder", "feed"]
+
+
+class EntryScope(StrEnum):
+    ALL = "all"
+    STARRED = "starred"
+    ORPHAN = "orphan"
+    FOLDER = "folder"
+    FEED = "feed"
+
+
+class ReadScope(StrEnum):
+    FOLDER = "folder"
+    FEED = "feed"
 
 
 def _folder_row(row: sqlite3.Row) -> FolderRow:
@@ -316,7 +327,7 @@ def get_starred_total(conn: sqlite3.Connection) -> int:
 def list_entries(
     conn: sqlite3.Connection,
     *,
-    scope: EntryScope = "all",
+    scope: EntryScope = EntryScope.ALL,
     folder_id: str | None = None,
     feed_id: str | None = None,
     unread_only: bool = True,
@@ -326,20 +337,20 @@ def list_entries(
     where: list[str] = []
     params: list[SqlParam] = []
 
-    if scope == "starred":
+    if scope == EntryScope.STARRED:
         where.append("e.is_starred = 1")
-    elif scope == "orphan":
+    elif scope == EntryScope.ORPHAN:
         where.append("f.folder_id IS NULL")
-    elif scope == "folder" and folder_id is not None:
+    elif scope == EntryScope.FOLDER and folder_id is not None:
         ids = descendant_folder_ids(conn, folder_id)
         placeholders = ",".join("?" for _ in ids)
         where.append(f"f.folder_id IN ({placeholders})")
         params.extend(ids)
-    elif scope == "feed" and feed_id is not None:
+    elif scope == EntryScope.FEED and feed_id is not None:
         where.append("e.feed_id = ?")
         params.append(feed_id)
 
-    if unread_only and scope != "starred":
+    if unread_only and scope != EntryScope.STARRED:
         where.append("e.is_read = 0")
 
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
@@ -394,12 +405,12 @@ def mark_scope_read(
     where = ["is_read = 0"]
     params: list[SqlParam] = []
 
-    if scope == "feed":
+    if scope == ReadScope.FEED:
         if feed_id is None:
             return 0
         where.append("feed_id = ?")
         params.append(feed_id)
-    elif scope == "folder":
+    elif scope == ReadScope.FOLDER:
         if folder_id is None:
             return 0
         ids = descendant_folder_ids(conn, folder_id)
