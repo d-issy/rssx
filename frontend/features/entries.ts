@@ -41,7 +41,9 @@ function replaceEntry(entryEl: HTMLElement, html: string): void {
 async function markRead(entryEl: HTMLElement, value: boolean): Promise<void> {
   const id = entryEl.dataset.entryId;
   if (!id) return;
-  const res = await fetch(`/entries/${id}/read?value=${value ? 1 : 0}`, { method: "POST" });
+  const url = new URL(`/entries/${id}/read`, location.origin);
+  url.searchParams.set("value", value ? "1" : "0");
+  const res = await fetch(url, { method: "POST" });
   const html = await res.text();
   replaceEntry(entryEl, html);
   dispatch(DomainEvent.COUNTS_CHANGED);
@@ -105,7 +107,7 @@ function currentScopeReadUrl(): URL | null {
   const target = current.get(scope);
   if (!target) return null;
 
-  const url = new URL("/entries/read-scope", location.origin);
+  const url = new URL("/entries/read-all", location.origin);
   url.searchParams.set("scope", scope);
   url.searchParams.set(scope, target);
   return url;

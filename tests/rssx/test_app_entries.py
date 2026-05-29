@@ -76,7 +76,7 @@ def test_entry_read_scope_marks_current_feed(db_path: Path) -> None:
 
     with make_client(db_path) as client:
         resp = client.post(
-            "/entries/read-scope",
+            "/entries/read-all",
             params={"scope": "feed", "feed": feed_id},
             headers={"HX-Request": "true"},
         )
