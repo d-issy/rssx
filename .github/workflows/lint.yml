@@ -16,7 +16,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      python: ${{ steps.filter.outputs.python }}
+      tui: ${{ steps.filter.outputs.tui }}
       actions: ${{ steps.filter.outputs.actions }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -27,7 +27,7 @@ jobs:
         id: filter
         with:
           filters: |
-            python:
+            tui:
               - 'src/rssx/**'
               - 'tests/**'
               - 'pyproject.toml'
@@ -39,9 +39,9 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
 
-  python:
+  tui:
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.tui == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -112,7 +112,7 @@ jobs:
         run: nix run nixpkgs#zizmor -- .
 
   all-lint-passed:
-    needs: [changes, python, actionlint, zizmor]
+    needs: [changes, tui, actionlint, zizmor]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -121,7 +121,7 @@ jobs:
           fail=0
           for r in \
             "changes:${{ needs.changes.result }}" \
-            "python:${{ needs.python.result }}" \
+            "tui:${{ needs.tui.result }}" \
             "actionlint:${{ needs.actionlint.result }}" \
             "zizmor:${{ needs.zizmor.result }}"
           do

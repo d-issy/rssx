@@ -12,7 +12,7 @@ test:
 cov:
     uv run pytest --cov
 
-# Lint Python
+# Lint TUI
 lint:
     uv run ruff check
     uv run ruff format --check
