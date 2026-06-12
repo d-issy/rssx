@@ -49,11 +49,6 @@ class ManageTab(StrEnum):
     FOLDERS = "folders"
 
 
-class FocusPane(StrEnum):
-    SIDEBAR = "sidebar"
-    ENTRIES = "entries"
-
-
 @dataclass
 class SidebarItem:
     kind: Scope | str
@@ -95,8 +90,6 @@ class RssxTui:
         self.current_feed_id: str | None = None
         self.unread_only = True
         self.search_query = ""
-        self.focus_pane = FocusPane.ENTRIES
-        self.sidebar_flash_until = 0.0
         self.navigation_auto_return_at: float | None = None
 
         self.sidebar_items: list[SidebarItem] = []
@@ -312,12 +305,7 @@ class RssxTui:
 
     def _entry_lines(self, rows: int, width: int) -> list[str]:
         title = self._scope_title()
-        out = [
-            style(
-                self._fit(title, width),
-                "bold" if self.focus_pane is FocusPane.ENTRIES else "accent",
-            )
-        ]
+        out = [style(self._fit(title, width), "bold")]
         if not self.entries:
             out.append("表示する記事がありません。")
             return out
@@ -580,18 +568,11 @@ class RssxTui:
         else:
             self._handle_main_key(key)
 
-    def _toggle_focus_pane(self) -> None:
-        self.focus_pane = (
-            FocusPane.ENTRIES if self.focus_pane is FocusPane.SIDEBAR else FocusPane.SIDEBAR
-        )
-
     def _handle_main_key(self, key: Key) -> None:
         if key == "q":
             self.running = False
         elif key in {"tab", "left"}:
             self.view = View.NAVIGATION
-        elif key == "right":
-            self.focus_pane = FocusPane.ENTRIES
         elif key in {"j", "down"}:
             self._move_entry(1, expand=True)
         elif key in {"k", "up"}:
@@ -912,62 +893,6 @@ class RssxTui:
             self.status_error = event.error is not None
             self.last_sync_at = datetime.now().astimezone()
             self.reload_all()
-
-    def _open_folder_selector_flow(self) -> None:
-        folders = repo.list_folders(self.conn)
-        feeds = repo.list_feeds(self.conn)
-        tree, orphan_feeds, _orphan_unread = repo.build_sidebar_tree(folders, feeds)
-        choices = [
-            Choice("すべて", "all"),
-            Choice("★ スター", "starred"),
-        ]
-
-        def feed_label(feed: FeedListItem, depth: int) -> str:
-            badge = f" {feed.unread_count}" if feed.unread_count else ""
-            return f"{'  ' * depth}  {feed.title}{badge}"
-
-        def add_folder(node: FolderTreeNode, depth: int) -> None:
-            badge = f" {node.unread_count}" if node.unread_count else ""
-            choices.append(Choice(f"{'  ' * depth}▾ {node.name}{badge}", f"folder:{node.id}"))
-            for child in node.children:
-                add_folder(child, depth + 1)
-            for feed in node.feeds:
-                choices.append(Choice(feed_label(feed, depth + 1), f"feed:{feed.id}"))
-
-        for node in tree:
-            add_folder(node, 0)
-        for feed in orphan_feeds:
-            choices.append(Choice(feed_label(feed, 0), f"feed:{feed.id}"))
-
-        self.choices = choices
-        self.choice_title = "フォルダ/フィード選択"
-        self.choice_index = -1
-
-        def finish(value: str | None) -> None:
-            if value is None:
-                return
-            self.current_folder_id = None
-            self.current_feed_id = None
-            self.search_query = ""
-            self.expanded_entry_id = None
-            self.expanded_at = None
-            self.entry_index = -1
-            self.entry_top = 0
-            if value == "all":
-                self.scope = Scope.ALL
-            elif value == "starred":
-                self.scope = Scope.STARRED
-            elif value.startswith("folder:"):
-                self.scope = Scope.FOLDER
-                self.current_folder_id = value.removeprefix("folder:")
-            elif value.startswith("feed:"):
-                self.scope = Scope.FEED
-                self.current_feed_id = value.removeprefix("feed:")
-            self.reload_all(preserve_entry=False)
-
-        self.choice_callback = finish
-        self.choice_return_view = self.view
-        self.view = View.CHOOSE_FOLDER
 
     def _add_feed_flow(self) -> None:
         url = self.prompt("フィードURL")
