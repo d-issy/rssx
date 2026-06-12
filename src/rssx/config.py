@@ -2,14 +2,13 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rssx.lib.paths import xdg_config_home, xdg_data_home
+from rssx.lib.paths import xdg_config_home, xdg_data_home, xdg_state_home
 
 
 @dataclass
 class Config:
     db_path: Path = field(default_factory=lambda: xdg_data_home() / "rssx" / "rssx.db")
-    host: str = "localhost"
-    port: int = 8080
+    state_path: Path = field(default_factory=lambda: xdg_state_home() / "rssx" / "state.toml")
     min_interval_min: int = 10
     max_interval_min: int = 24 * 60
     initial_interval_min: int = 30
@@ -25,10 +24,8 @@ class Config:
                 data = tomllib.load(f)
             if "db_path" in data:
                 cfg.db_path = Path(data["db_path"]).expanduser()
-            if "host" in data:
-                cfg.host = str(data["host"])
-            if "port" in data:
-                cfg.port = int(data["port"])
+            if "state_path" in data:
+                cfg.state_path = Path(data["state_path"]).expanduser()
             if "timezone" in data:
                 cfg.timezone = str(data["timezone"])
             fetch = data.get("fetch", {})

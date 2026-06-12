@@ -1,51 +1,24 @@
 default:
     @just --list
 
-# Start the server (expects the frontend bundle to already exist)
+# Start the TUI
 run:
     uv run rssx
 
-# Start the dev server: server reload + frontend watch, in parallel
-dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    trap 'kill 0' EXIT INT TERM
-    uv run watchfiles --filter python 'uv run rssx' src/rssx &
-    pnpm dev &
-    wait
-
 # Run unit tests
-test: test-backend test-frontend
-
-test-backend:
+test:
     uv run pytest
 
-test-frontend:
-    pnpm test
-
-cov: cov-backend cov-frontend
-
-cov-backend:
+cov:
     uv run pytest --cov
 
-cov-frontend:
-    pnpm test:cov
-
-# Lint everything (backend + frontend)
-lint: lint-backend lint-frontend
-
-# Lint backend: ruff + mypy
-lint-backend:
+# Lint TUI
+lint:
     uv run ruff check
     uv run ruff format --check
     uv run mypy
 
-# Lint frontend: oxlint + tsc
-lint-frontend:
-    pnpm exec oxlint
-    pnpm typecheck
-
-# Auto-format and auto-fix everything (Python + TS + JSON + Nix)
+# Auto-format and auto-fix Python + JSON + Nix
 fmt:
     treefmt
 

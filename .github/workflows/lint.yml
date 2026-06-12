@@ -16,8 +16,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      tui: ${{ steps.filter.outputs.tui }}
       actions: ${{ steps.filter.outputs.actions }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -28,19 +27,11 @@ jobs:
         id: filter
         with:
           filters: |
-            backend:
+            tui:
               - 'src/rssx/**'
+              - 'tests/**'
               - 'pyproject.toml'
               - 'uv.lock'
-              - '.github/workflows/lint.yml'
-            frontend:
-              - 'frontend/**'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'tsconfig.json'
-              - 'vite.config.ts'
-              - '.oxlintrc.json'
-              - '.oxfmtrc.json'
               - '.github/workflows/lint.yml'
             actions:
               - '.github/workflows/**'
@@ -48,9 +39,9 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
 
-  backend:
+  tui:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.tui == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -77,33 +68,6 @@ jobs:
 
       - name: mypy
         run: uv run mypy
-
-  frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: package.json
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: oxlint
-        run: pnpm exec oxlint
-
-      - name: tsc --noEmit
-        run: pnpm typecheck
 
   actionlint:
     name: actionlint
@@ -148,7 +112,7 @@ jobs:
         run: nix run nixpkgs#zizmor -- .
 
   all-lint-passed:
-    needs: [changes, backend, frontend, actionlint, zizmor]
+    needs: [changes, tui, actionlint, zizmor]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -157,8 +121,7 @@ jobs:
           fail=0
           for r in \
             "changes:${{ needs.changes.result }}" \
-            "backend:${{ needs.backend.result }}" \
-            "frontend:${{ needs.frontend.result }}" \
+            "tui:${{ needs.tui.result }}" \
             "actionlint:${{ needs.actionlint.result }}" \
             "zizmor:${{ needs.zizmor.result }}"
           do

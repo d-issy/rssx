@@ -10,3 +10,8 @@ def xdg_data_home() -> Path:
 def xdg_config_home() -> Path:
     value = os.environ.get("XDG_CONFIG_HOME")
     return Path(value).expanduser() if value else Path.home() / ".config"
+
+
+def xdg_state_home() -> Path:
+    value = os.environ.get("XDG_STATE_HOME")
+    return Path(value).expanduser() if value else Path.home() / ".local" / "state"

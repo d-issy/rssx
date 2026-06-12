@@ -13,7 +13,7 @@ def test_parse_stored_datetime_accepts_sqlite_and_iso_values() -> None:
     assert parse_stored_datetime("not a datetime") is None
 
 
-def test_make_datetime_filters_formats_for_templates() -> None:
+def test_make_datetime_filters_formats_datetimes() -> None:
     iso_utc, fmt_dt = make_datetime_filters(ZoneInfo("Asia/Tokyo"))
 
     assert iso_utc("2024-01-15 09:30:00") == "2024-01-15T09:30:00Z"
