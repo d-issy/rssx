@@ -18,8 +18,7 @@ Common tasks are exposed via [`just`](https://github.com/casey/just):
 | `just` | List available recipes |
 | `just run` | Start the TUI |
 | `just test` | Run unit tests |
-| `just cov` | Run unit tests with coverage |
-| `just lint` | Run ruff check + format check + mypy |
+| `just lint` | Run golangci-lint and formatting checks |
 | `just fmt` | Format code |
 | `just db [path]` | Open the SQLite database in `sqlite3` |
 
