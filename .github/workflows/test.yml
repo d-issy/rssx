@@ -16,7 +16,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      tui: ${{ steps.filter.outputs.tui }}
+      go: ${{ steps.filter.outputs.go }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -26,39 +26,37 @@ jobs:
         id: filter
         with:
           filters: |
-            tui:
-              - 'src/rssx/**'
-              - 'tests/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Justfile'
+              - 'flake.nix'
+              - 'flake.lock'
               - '.github/workflows/test.yml'
 
-  tui:
+  go:
     needs: changes
-    if: needs.changes.outputs.tui == 'true'
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Install Python
-        run: uv python install 3.14
-
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: pytest
-        run: uv run pytest
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-go-test-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}
+          restore-prefixes-first-match: nix-go-test-${{ runner.os }}-
+      - name: Test Go
+        run: nix develop --command just test
 
   all-test-passed:
-    needs: [changes, tui]
+    needs: [changes, go]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -67,7 +65,7 @@ jobs:
           fail=0
           for r in \
             "changes:${{ needs.changes.result }}" \
-            "tui:${{ needs.tui.result }}"
+            "go:${{ needs.go.result }}"
           do
             name="${r%%:*}"
             result="${r##*:}"

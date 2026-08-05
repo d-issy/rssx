@@ -16,13 +16,12 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        pyprojectContent = builtins.readFile ./pyproject.toml;
       in
       {
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            python314
-            uv
+            go_1_26
+            golangci-lint
             sqlite
             just
             treefmt
@@ -32,9 +31,6 @@
           ];
 
           shellHook = ''
-            export UV_PYTHON=${pkgs.python314}/bin/python3.14
-            : "${builtins.hashString "sha256" pyprojectContent}"
-            uv sync --quiet
             echo "rssx dev shell ready. Run: just run"
           '';
         };

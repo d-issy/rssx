@@ -1,24 +1,14 @@
 [global]
 excludes = [
-  "uv.lock",
   "flake.lock",
-  "node_modules/**",
-  ".venv/**",
   ".direnv/**",
-  ".mypy_cache/**",
-  ".ruff_cache/**",
 ]
-
-[formatter.ruff-check]
-command = "uv"
-options = ["run", "ruff", "check", "--fix", "--exit-zero"]
-includes = ["*.py"]
-
-[formatter.ruff-format]
-command = "uv"
-options = ["run", "ruff", "format"]
-includes = ["*.py"]
 
 [formatter.nixfmt]
 command = "nixfmt"
 includes = ["*.nix"]
+
+[formatter.gofmt]
+command = "gofmt"
+options = ["-w"]
+includes = ["*.go"]

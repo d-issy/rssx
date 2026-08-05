@@ -1,24 +1,22 @@
+set quiet
+
 default:
     @just --list
 
 # Start the TUI
 run:
-    uv run rssx
+    go run -tags libsqlite3 ./cmd/rssx
 
 # Run unit tests
 test:
-    uv run pytest
+    go test -tags libsqlite3 ./...
 
-cov:
-    uv run pytest --cov
-
-# Lint TUI
+# Run static analysis and formatting checks
 lint:
-    uv run ruff check
-    uv run ruff format --check
-    uv run mypy
+    golangci-lint run ./...
+    treefmt --fail-on-change
 
-# Auto-format and auto-fix Python + JSON + Nix
+# Auto-format Go and Nix
 fmt:
     treefmt
 

@@ -16,7 +16,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      tui: ${{ steps.filter.outputs.tui }}
+      go: ${{ steps.filter.outputs.go }}
       actions: ${{ steps.filter.outputs.actions }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -27,11 +27,15 @@ jobs:
         id: filter
         with:
           filters: |
-            tui:
-              - 'src/rssx/**'
-              - 'tests/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.golangci.yml'
+              - 'Justfile'
+              - 'treefmt.toml'
+              - 'flake.nix'
+              - 'flake.lock'
               - '.github/workflows/lint.yml'
             actions:
               - '.github/workflows/**'
@@ -39,35 +43,25 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
 
-  tui:
+  go:
     needs: changes
-    if: needs.changes.outputs.tui == 'true'
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Install Python
-        run: uv python install 3.14
-
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: ruff check
-        run: uv run ruff check
-
-      - name: ruff format --check
-        run: uv run ruff format --check
-
-      - name: mypy
-        run: uv run mypy
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-go-lint-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}
+          restore-prefixes-first-match: nix-go-lint-${{ runner.os }}-
+      - name: Lint Go
+        run: nix develop --command just lint
 
   actionlint:
     name: actionlint
@@ -112,7 +106,7 @@ jobs:
         run: nix run nixpkgs#zizmor -- .
 
   all-lint-passed:
-    needs: [changes, tui, actionlint, zizmor]
+    needs: [changes, go, actionlint, zizmor]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -121,7 +115,7 @@ jobs:
           fail=0
           for r in \
             "changes:${{ needs.changes.result }}" \
-            "tui:${{ needs.tui.result }}" \
+            "go:${{ needs.go.result }}" \
             "actionlint:${{ needs.actionlint.result }}" \
             "zizmor:${{ needs.zizmor.result }}"
           do
